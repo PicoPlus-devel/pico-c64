@@ -294,8 +294,10 @@ Besides the settings every emulator of the family has, the settings menu offers:
 
 They are kept in `/settings_C64x.dat` on the SD card.
 
-**Overclock** (HSTX boards, from the ROM browser) runs the RP2350 at 384 MHz instead of
-252 MHz, for demanding demos and loaders.
+The RP2350 runs at 384 MHz on boards with HSTX video output (HW_CONFIG 2, 5, 8, 13, 14
+and 15), which the Commodore 128 needs for its 2 MHz mode and its disk drive to run at
+full speed, and at 252 MHz on the other boards, where the C64 needs no more. There is no
+Overclock setting.
 
 ## Display and timing
 

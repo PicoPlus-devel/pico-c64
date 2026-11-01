@@ -45,25 +45,29 @@ extern "C"
 }
 
 // -------------------------------------------------------------------------------------
-// Clocks. 252 MHz at 1.20 V is enough on both video back ends. Measured on a Pico 2 per
-// 20 ms frame: gameplay 9 ms, the 1541 loading flat out 16.7 ms (HSTX, the SID on core
-// 1). It is also the only clock that gives PicoDVI an exact 60 Hz, and a multiple of
-// the 126 MHz HSTX needs for HDMI audio.
+// Clocks.
 //
-// HSTX boards offer 384 MHz at 1.50 V as the Overclock setting (ROM browser; it reboots),
-// as pico-genesisPlus runs there (8 x 48 MHz: the built-in USB port keeps working): headroom for demos and heavy fast loaders.
-// Both can be given at build time (-DC64_CLOCK_KHZ=... -DC64_VOLTAGE=..., CMakeLists.txt).
+// PicoDVI boards: 252 MHz at 1.20 V, the only clock that gives PicoDVI an exact 60 Hz. The
+// C64 needs at most 16.7 ms of its 20 ms frame there (gameplay 9 ms, the 1541 loading flat
+// out 16.7 ms; measured on a Pico 2).
+//
+// HSTX boards: 384 MHz at 1.50 V, as pico-genesisPlus runs (8 x 48 MHz: USB runs from
+// PLL_SYS and the built-in USB port keeps working; pico_shared makes the 126 MHz HSTX
+// clock). These are the boards the C128 runs on, and it needs it: at 252 MHz on the Fruit
+// Jam its 2 MHz mode in 80 columns ran at about 90% speed and loading from the 1571 at
+// about 70% (the 1571's ROM is in PSRAM there); at 384 MHz all of it at full speed.
+//
+// No Overclock setting: nothing above these. Both can be given at build time
+// (-DC64_CLOCK_KHZ=... -DC64_VOLTAGE=..., CMakeLists.txt).
 // -------------------------------------------------------------------------------------
 #ifndef EMULATOR_CLOCKFREQ_KHZ
+#if HSTX
+#define EMULATOR_CLOCKFREQ_KHZ 384000
+#define VOLTAGE VREG_VOLTAGE_1_50
+#else
 #define EMULATOR_CLOCKFREQ_KHZ 252000
 #define VOLTAGE VREG_VOLTAGE_1_20
 #endif
-#if HSTX
-#define EMULATOR_MAX_CLOCKFREQ_KHZ 384000
-#define MAX_VOLTAGE VREG_VOLTAGE_1_50
-#define OVERCLOCK_SETTING 1
-#else
-#define OVERCLOCK_SETTING 0
 #endif
 
 // The serial keyboard reads the stdio UART's RX pin, so only where a board has a UART console
@@ -126,7 +130,7 @@ static void init_settings_visibility(void)
     v[MOPT_FONT_BACK_COLOR] = 1;
     v[MOPT_FRUITJAM_VUMETER] = ENABLE_VU_METER;
     v[MOPT_FRUITJAM_VOLUME_CONTROL] = (HW_CONFIG == 8);
-    v[MOPT_OVERCLOCK] = OVERCLOCK_SETTING;     // ROM browser only: it reboots
+    v[MOPT_OVERCLOCK] = 0;                      // one clock per board (see Clocks)
     v[MOPT_DISK] = 1;                           // in-game only (menu.cpp); N/A without a 1541 ROM
     v[MOPT_CASSETTE] = 1;
     v[MOPT_ENTER_BOOTSEL_MODE] = 1;
@@ -2240,21 +2244,9 @@ int main()
     char selectedRom[FF_MAX_LFN];
     ErrorMessage[0] = selectedRom[0] = 0;
 
-    // Where the Overclock setting exists, the menu stores the chosen clock in FlashParams
-    // and reboots; it is picked up here (as in pico-genesisPlus).
-    vreg_voltage voltage = VOLTAGE;
-#if OVERCLOCK_SETTING
-    Frens::setOverclockLimits(EMULATOR_CLOCKFREQ_KHZ, EMULATOR_MAX_CLOCKFREQ_KHZ, VOLTAGE, MAX_VOLTAGE);
-    const Frens::FlashParams *flashParams = (const Frens::FlashParams *)FLASHPARAM_ADDRESS;
-    if (Frens::validateFlashParams(*flashParams))
-    {
-        CPUFreqKHz = flashParams->cpuFreqKHz;
-        voltage = flashParams->voltage;
-    }
-#else
+    // One clock per board (see Clocks above): no Overclock setting to pick another
     Frens::setOverclockLimits(CPUFreqKHz, CPUFreqKHz, VOLTAGE, VOLTAGE);
-#endif
-    Frens::setClocksAndStartStdio(CPUFreqKHz, voltage);
+    Frens::setClocksAndStartStdio(CPUFreqKHz, VOLTAGE);
 
     printf("==========================================================================================\n");
     printf("pico-c64 (Commodore 64/128) %s\n", SWVERSION);
