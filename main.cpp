@@ -1094,6 +1094,7 @@ static uint8_t keys_down[(CBM_KEYS + 7) / 8];   // as last sent to the core
 static uint8_t prevButtons[2];
 static bool startAlone = false;         // Start went down with nothing else
 static int runStopFrames = 0;           // RUN/STOP held for a few frames after a Start tap
+static bool heldFromMenu = false;       // input still held from the menu: ignored until let go
 
 static inline void set_bit(uint8_t *bits, int k) { bits[k >> 3] |= 1u << (k & 7); }
 static inline bool get_bit(const uint8_t *bits, int k) { return bits[k >> 3] & (1u << (k & 7)); }
@@ -1285,6 +1286,26 @@ static void update_input(void)
 
     // The keypad joystick goes with the first gamepad
     joy[0] |= kbJoy;
+
+    // What is still held from the menu - Esc or B that closed it, Enter or A that started the
+    // game - reaches the machine only once everything has been let go
+    if (heldFromMenu)
+    {
+        bool any = joy[0] || joy[1];
+        for (size_t i = 0; i < sizeof(want) && !any; i++)
+        {
+            any = want[i] != 0;
+        }
+        if (any)
+        {
+            memset(want, 0, sizeof(want));
+            joy[0] = joy[1] = 0;
+        }
+        else
+        {
+            heldFromMenu = false;
+        }
+    }
     cbm_joystick(joystick_port, joy[0]);
     cbm_joystick(3 - joystick_port, joy[1]);
 
@@ -1306,6 +1327,7 @@ static void release_input(void)
     memset(keys_down, 0, sizeof(keys_down));
     shift_lock = false;
     runStopFrames = 0;
+    heldFromMenu = true;
 }
 
 // =====================================================================================
@@ -1669,7 +1691,7 @@ static bool c128_possible(void)
 // The last row only where the C128 can run
 static const MenuEmulatorOption c64Options[] = {
     {"Joystick port", "Port of gamepad 1 (Select+A swaps it)", 2, portNames, 0, opt_port_get, opt_port_set},
-    {"Fast disk load", "LOAD from drive 8 at once, not at 1541 speed", 2, nullptr, 1, opt_fastload_get, opt_fastload_set},
+    {"Fast disk load", "Instant LOAD from drive 8", 2, nullptr, 1, opt_fastload_get, opt_fastload_set},
     {"Keyboard layout", "US: keys as printed. C64: by position", 2, keyboardNames, 0, opt_keyboard_get, opt_keyboard_set},
     {"Machine", "What .d64 and .g64 disks start on", 2, machineNames, 0, opt_machine_get, opt_machine_set},
 };
