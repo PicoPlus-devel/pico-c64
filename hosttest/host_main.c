@@ -56,7 +56,8 @@
  * Other compile-time logs: -DCBM_MMU_LOG (C128 MMU writes, CPU switches),
  * -DCBM_FAST_LOG (fast serial bytes, 1571 side and speed changes),
  * -DCBM_VDC_LOG (the VDC's block fills and copies), -DCBM_FEED_LOG (how
- * long each key typed by cbm_type_serial() was held). Build with them:
+ * long each key typed by cbm_type_serial() was held), -DCBM_SID_LOG (the
+ * SID register writes, as the render side replays them). Build with them:
  * EXTRA_CFLAGS=-DCBM_VDC_LOG hosttest/build.sh
  */
 #include <stdio.h>

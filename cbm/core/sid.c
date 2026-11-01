@@ -3,16 +3,17 @@
  *
  * Like the AY on the CPC and the Spectrum: register writes become events
  * stamped with their cycle; the render side (the speaker task) replays them
- * into its own copy of the chip, one output sample per 32 cycles. Voice 3
- * also runs on the emulation side, as far as reading its oscillator
+ * into its own copy of the chip, one 44.1 kHz output sample per 22.3 cycles.
+ * Voice 3 also runs on the emulation side, as far as reading its oscillator
  * ($D41B) and envelope ($D41C) needs (games take random numbers from its
  * noise).
  *
  * Per voice: a 24-bit phase accumulator, triangle / sawtooth / pulse /
- * noise (combinations ANDed), ring modulation and hard sync, the ADSR with
- * the chip's rate periods and exponential decay; then the filter (a state
- * variable one, low / band / high pass with resonance) and the volume,
- * whose DC step makes the $D418 sample trick audible.
+ * noise (combinations ANDed; sawtooth and pulse band-limited), ring
+ * modulation and hard sync, the ADSR with the chip's rate periods and
+ * exponential decay; then the filter (a state variable one, low / band /
+ * high pass with resonance), the volume, whose DC step makes the $D418
+ * sample trick audible, and the low pass of the C64's output stage.
  */
 #include <math.h>
 #include <string.h>
@@ -274,29 +275,47 @@ void sid_frame_end(void)
 
 /* ---- Render side ---- */
 
+/* The mix at full volume: three voices at full level (+-6144, and the DC)
+ * peak at about +-16 K, which leaves room for the filter's resonance and for
+ * the DC blocker's swing around a lopsided waveform
+ */
+#define MIX_SCALE           0.18f
+/* The C64's output stage: a low pass at about 16 kHz (1 - e^(-2 pi 16000 / 44100)) */
+#define OUTPUT_LP           0.9f
+/* The phase step (0-1) per sample of one unit of a voice's frequency */
+#define DT_PER_FREQ         ((float)CBM_FRAME_CYCLES / (CBM_AUDIO_HZ / CBM_SCREEN_HZ) / 16777216.0f)
+
 static struct {
     voice_t v[3];
     uint8_t reg[32];
-    float lp, bp;                           /* filter state */
-    float f, q;                             /* coefficients */
+    float ic1, ic2;                         /* filter state */
+    float k, a1, a2, a3;                    /* coefficients */
+    float lp_out;                           /* output stage */
     int32_t dc;
     uint32_t pos;                           /* cycle the next sample starts at */
     uint32_t frac;                          /* and its fraction (16 bits) */
 } ren;
 
+/* A state variable filter in its trapezoidal (zero-delay feedback) form,
+ * which stays in tune and stable up to the top of the range at 44.1 kHz.
+ * Q from 0.707 to 1.707 over the resonance, as in reSID
+ */
 static void filter_coefficients(void)
 {
     uint16_t fc = (ren.reg[0x15] & 7) | (ren.reg[0x16] << 3);
     float hz = 30.0f + fc * 5.8f;           /* 8580-like, 30 Hz - 12 kHz */
-    ren.f = 2.0f * sinf(3.14159265f * hz / CBM_AUDIO_HZ);
-    if (ren.f > 1.2f) {
-        ren.f = 1.2f;
-    }
-    ren.q = 1.0f / (0.707f + (ren.reg[0x17] >> 4) / 15.0f * 2.0f);
+    float g = tanf(3.14159265f * hz / CBM_AUDIO_HZ);
+    ren.k = 1.0f / (0.707f + (ren.reg[0x17] >> 4) / 15.0f);
+    ren.a1 = 1.0f / (1.0f + g * (g + ren.k));
+    ren.a2 = g * ren.a1;
+    ren.a3 = g * ren.a2;
 }
 
 static void synth_write(uint8_t reg, uint8_t v)
 {
+#ifdef CBM_SID_LOG
+    CBM_LOG("SID %u $%02X=$%02X", ren.pos, reg, v);
+#endif
     ren.reg[reg] = v;
     if (reg < 21) {
         voice_write(&ren.v[reg / 7], reg % 7, v);
@@ -308,6 +327,48 @@ static void synth_write(uint8_t reg, uint8_t v)
 static inline int16_t clip16(int32_t v)
 {
     return v < -32768 ? -32768 : v > 32767 ? 32767 : v;
+}
+
+/* PolyBLEP: what a step of -2 at phase 0 adds to the sample at phase t (0-1)
+ * of a waveform that advances dt (1 / inv) per sample
+ */
+static inline float blep(float t, float dt, float inv)
+{
+    if (t < dt) {
+        t *= inv;
+        return t + t - t * t - 1.0f;
+    }
+    if (t > 1.0f - dt) {
+        t = (t - 1.0f) * inv;
+        return t * t + t + t + 1.0f;
+    }
+    return 0.0f;
+}
+
+/* A voice's waveform, -2048 to 2047. A sawtooth or a pulse on its own is
+ * band-limited at its steps, which would otherwise alias at 44.1 kHz; the
+ * combined waveforms, noise and the test bit are the chip's 12-bit output.
+ */
+static inline float voice_out(const voice_t *v, uint32_t ring_acc)
+{
+    float out = (float)wave_out(v, ring_acc) - 2048.0f;
+    uint8_t w = v->ctrl >> 4;
+    if ((w != 2 && w != 4) || (v->ctrl & 0x08) || v->freq == 0) {
+        return out;
+    }
+    float dt = v->freq * DT_PER_FREQ, inv = 1.0f / dt;
+    float t = v->acc * (1.0f / 16777216.0f);
+    if (w == 2) {                           /* falls at the wrap */
+        return out - 2048.0f * blep(t, dt, inv);
+    }
+    if (v->pw == 0) {                       /* a pulse that is always high */
+        return out;
+    }
+    float rise = t - v->pw * (1.0f / 4096.0f);
+    if (rise < 0) {
+        rise += 1.0f;
+    }
+    return out + 2048.0f * (blep(rise, dt, inv) - blep(t, dt, inv));
 }
 
 static int16_t sample(uint32_t cycles)
@@ -327,8 +388,7 @@ static int16_t sample(uint32_t cycles)
     float filtered = 0, direct = 0;
     uint8_t route = ren.reg[0x17], mode = ren.reg[0x18];
     for (int i = 0; i < 3; i++) {
-        int32_t w = (int32_t)wave_out(&v[i], v[(i + 2) % 3].acc) - 0x800;
-        float out = (float)(w * v[i].env) / 256.0f;     /* +-2048 */
+        float out = voice_out(&v[i], v[(i + 2) % 3].acc) * v[i].env * (1.0f / 256.0f);  /* +-2048 */
         if (route & (1u << i)) {
             filtered += out;
         } else if (!(i == 2 && (mode & 0x80))) {
@@ -336,23 +396,24 @@ static int16_t sample(uint32_t cycles)
         }
     }
     /* state variable filter */
-    float hp = filtered - ren.lp - ren.q * ren.bp;
-    ren.bp += ren.f * hp;
-    ren.lp += ren.f * ren.bp;
+    float v3 = filtered - ren.ic2;
+    float bp = ren.a1 * ren.ic1 + ren.a2 * v3;
+    float lp = ren.ic2 + ren.a2 * ren.ic1 + ren.a3 * v3;
+    ren.ic1 = 2.0f * bp - ren.ic1;
+    ren.ic2 = 2.0f * lp - ren.ic2;
     float out = direct;
     if (mode & 0x10) {
-        out += ren.lp;
+        out += lp;
     }
     if (mode & 0x20) {
-        out += ren.bp;
+        out += bp;
     }
     if (mode & 0x40) {
-        out += hp;
+        out += filtered - ren.k * bp - lp;
     }
-    /* the volume, with the DC the $D418 trick plays on: three voices at
-     * full volume (+-6144, and the DC) just fit 16 bits
-     */
-    int32_t mix = (int32_t)((out + 1024.0f) * (mode & 15) * 0.3f);
+    /* the volume, with the DC the $D418 trick plays on */
+    ren.lp_out += OUTPUT_LP * ((out + 1024.0f) * (mode & 15) * MIX_SCALE - ren.lp_out);
+    int32_t mix = (int32_t)ren.lp_out;
     ren.dc += (mix * 256 - ren.dc) >> 11;
     return clip16(mix - (ren.dc >> 8));
 }

@@ -5,6 +5,9 @@ programs, disk images, tapes and cartridges from an SD card and puts the picture
 on a TV or monitor over HDMI or DVI. A USB keyboard works as the computer's keyboard and
 game controllers as its joysticks.
 
+Ported by Frank Hoedemakers ([fhoedemakers](https://github.com/fhoedemakers)), with AI
+assistance (see [AI assistance](#ai-assistance)).
+
 Based on the emulation core of [esp32cbm](https://github.com/rlucencic/esp32cbm) by Robert
 Lucencic, with the 6502 and Z80 cores from [esp32emu](https://github.com/rlucencic/esp32emu),
 and on the video, audio, menu and SD card framework of
@@ -425,9 +428,9 @@ The C128's 80-column screen is shown with its 640 pixels, each line twice.
   protection is not handled by the drive emulation.
 - The side borders are not shown, see [Display and timing](#display-and-timing).
 - Commodore 128: the VDC has 16 KB of video memory, as in the original C128 (not the
-  64 KB of the C128DCR); there are no function ROMs; 2 MHz mode does not disturb the
-  40-column picture beyond switching it off; the 1571 does not read MFM disks of other
-  CP/M machines.
+  64 KB of the C128DCR); there are no function ROMs; in 2 MHz mode the 40-column picture
+  stays intact, where a real C128 garbles it (BASIC's `FAST` blanks it, as on the real
+  machine); the 1571 does not read MFM disks of other CP/M machines.
 
 ## Not yet done
 
@@ -465,6 +468,12 @@ text as the serial keyboard does. See [hosttest/README.md](hosttest/README.md).
 made for this port is listed in [cbm/UPSTREAM.md](cbm/UPSTREAM.md).
 
 ## Credits
+
+### Author
+
+- **Frank Hoedemakers** ([fhoedemakers](https://github.com/fhoedemakers)): the port, and
+  the video, audio, menu and SD card framework of
+  [pico-infonesPlus](https://github.com/PicoPlus-devel/pico-infonesPlus) it runs on.
 
 ### Emulator core
 
@@ -504,8 +513,8 @@ made for this port is listed in [cbm/UPSTREAM.md](cbm/UPSTREAM.md).
 [Anthropic Claude Opus 5.5](https://www.anthropic.com/claude/opus) assisted with the port:
 the emulation core's adaptation to the RP2350 (listed in [cbm/UPSTREAM.md](cbm/UPSTREAM.md)),
 the disk track cache, fast disk load, the datasette, the Commodore 128 on HSTX boards, the
-serial keyboard, keeping the ROMs in flash on boards without PSRAM, the test harness, and
-this readme and the changelog.
+serial keyboard, keeping the ROMs in flash on boards without PSRAM, the SID's sound
+(band-limited waveforms and the filter), the test harness, and this readme and the changelog.
 
 ### Other emulators of the family
 

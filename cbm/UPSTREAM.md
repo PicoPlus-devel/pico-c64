@@ -137,6 +137,15 @@ so the core can be updated from upstream again.
     (a power of two, 0 for upstream's 2048), for boards short of memory that play a
     frame's worth after each frame.
 
+18. `core/sid.c`: the sound. A sawtooth or a pulse on its own is band-limited at its
+    steps (PolyBLEP): a 1.5 kHz sawtooth's aliasing below 5 kHz is 52 dB below the tone
+    instead of 23. The filter is the state variable filter's trapezoidal form, in tune and
+    stable up to 12 kHz at 44.1 kHz (upstream's is clamped at about 9 kHz), with reSID's
+    Q (0.707-1.707; upstream's reaches 2.7). The mix is 4.4 dB lower (`MIX_SCALE`) so the
+    filter's resonance and the DC blocker's swing no longer clip (Alien Syndrome: up to 75
+    clipped samples a second before, none after), followed by the output stage's 16 kHz
+    low pass. Compile-time log `CBM_SID_LOG` (the register writes, as replayed).
+
 ## Known problems
 
 - Frankie Goes to Hollywood (Ocean, G64 of the original): its copy

@@ -98,10 +98,6 @@ extern "C"
 #define FRAME_US        20000
 #define FRAME_SAMPLES   (CBM_AUDIO_HZ / CBM_SCREEN_HZ)
 
-#ifndef DVI_AUDIO_GAIN_Q8
-#define DVI_AUDIO_GAIN_Q8 1024
-#endif
-
 static uint32_t CPUFreqKHz = EMULATOR_CLOCKFREQ_KHZ;
 
 bool isFatalError = false;
@@ -798,13 +794,8 @@ static void draw_osd(void)
 // hstx_push_audio_sample() drops packets. Parked while the machine is set up and while
 // the menu runs (it plays sounds of its own).
 // PicoDVI: core 1 encodes TMDS, so core 0 renders a frame's worth after each frame.
+// The SID's mix already fills 16 bits, so HDMI gets it as it is, like the external DAC.
 // =====================================================================================
-static inline int16_t apply_dvi_gain(int x)
-{
-    int v = (x * DVI_AUDIO_GAIN_Q8) >> 8;
-    return (int16_t)std::max(-32768, std::min(32767, v));
-}
-
 static inline bool audio_to_ext(void)
 {
 #if EXT_AUDIO_IS_ENABLED
@@ -861,16 +852,15 @@ static void __not_in_flash_func(audio_push)(const int16_t *buf, int samples, boo
         }
 #endif
 #if HSTX
-        hstx_push_audio_sample(apply_dvi_gain(l), apply_dvi_gain(r));
+        hstx_push_audio_sample(l, r);
 #else
         auto &ring = dvi_->getAudioRingBuffer();
         if (ring.getWritableSize() == 0)
         {
             break;
         }
-        int m = apply_dvi_gain(l);
         auto p = ring.getWritePointer();
-        *p = {static_cast<short>(m), static_cast<short>(m)};
+        *p = {static_cast<short>(l), static_cast<short>(r)};
         ring.advanceWritePointer(1);
 #endif
     }
