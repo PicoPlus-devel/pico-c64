@@ -53,6 +53,12 @@ endif()
 
 include("pico_shared/BoardConfigs.cmake")
 
+# Boards without PSRAM keep the C64's ROMs in flash (main.cpp, "ROMs in flash"): 64 KB
+# right above where pico_shared puts a cartridge, which this takes off its end. A normal
+# variable over BoardConfigs' cache entry, so pico_shared (added below) gets the sum.
+set(C64_ROM_STORE_BYTES 65536)
+math(EXPR FLASH_RESERVED_TOP "${FLASH_RESERVED_TOP} + ${C64_ROM_STORE_BYTES}")
+
 if(NOT PICO_BOARD)
     set(PICO_BOARD pico2 CACHE STRING "Board type")
     message("PICO_BOARD not set, using default: ${PICO_BOARD}")
@@ -149,6 +155,7 @@ target_compile_options(${projectname} PRIVATE
 # ---------------------------------------------------------------------------
 target_compile_definitions(${projectname} PRIVATE
     NDEBUG
+    C64_ROM_STORE_BYTES=${C64_ROM_STORE_BYTES}  # the ROMs in flash (see above)
     DVICONFIG=${DVICONFIG}
     SDCARD_PIN_CS=${SD_CS}
     SDCARD_PIN_SCK=${SD_SCK}

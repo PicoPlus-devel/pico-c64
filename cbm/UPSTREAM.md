@@ -133,6 +133,10 @@ so the core can be updated from upstream again.
     under CP/M). `cbm_vdc_line()` decodes a character row once and expands 8 pixels with
     one lookup. Compile-time logs `CBM_VDC_LOG`, `CBM_FEED_LOG`.
 
+17. `core/sid.c`, `core/include/cbm.h`: `cfg.audio_events`, the SID event queue's size
+    (a power of two, 0 for upstream's 2048), for boards short of memory that play a
+    frame's worth after each frame.
+
 ## Known problems
 
 - Frankie Goes to Hollywood (Ocean, G64 of the original): its copy

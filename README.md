@@ -326,8 +326,14 @@ Built for every RP2350 configuration `pico_shared` supports:
 
 HW_CONFIG 3 and 4 are RP2040-only boards; 11 is a deprecated pinout.
 
-PSRAM is optional. Without it, cartridges are read from flash and disks through the
-two-track cache described under [Disks](#disks).
+PSRAM is optional for the C64 (the Commodore 128 needs it). Without PSRAM:
+
+- The ROM files are copied from the SD card to the last 64 KB of the flash at the first
+  start, and read from there. This happens again only when the files on the card change,
+  or when other software has overwritten that part of the flash.
+- Cartridges are read from flash, where the menu writes them.
+- Disks are read through the two-track cache described under [Disks](#disks).
+- Disk and tape lists in the settings menu show at most 24 files.
 
 ## Building
 

@@ -69,6 +69,12 @@ typedef struct {
      * for cbm_vdc_line(); NULL: 64 KB of its own
      */
     uint8_t *vdc_ram;
+    /* SID register writes the audio queue holds until they are played: a
+     * power of two, 0 for 2048 (a board that plays a frame's worth after each
+     * frame needs a frame's writes; one short of memory can take fewer). Set
+     * by the first cbm_init() with sound on: the queue is kept
+     */
+    uint16_t audio_events;
     /* Or (frame NULL): each VIC-II line that changed, as CBM_SCREEN_WIDTH
      * colour numbers (0-15) for the board to draw itself; and (vdc_frame
      * NULL) the 80 columns line by line with cbm_vdc_line()

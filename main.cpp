@@ -155,7 +155,10 @@ const uint8_t g_available_screen_modes_c64[] = {
 // per cycle - RAM and ROMs come from load_machine().
 // =====================================================================================
 #define CBM_SRAM_BIG    (4 * 1024)      // from this size on, PSRAM if there is any
-#define CBM_SRAM_RESERVE (24 * 1024)    // left for the menu, FatFs and the stack
+// Left for the menu, FatFs and the stack: with PSRAM generous, as the big blocks go there
+// anyway; without, every block the machine needs is accounted for (the ROMs in flash, a
+// smaller SID queue, shorter disk and tape lists) and this covers the menu's screen
+#define CBM_SRAM_RESERVE (Frens::isPsramEnabled() ? 24 * 1024 : 8 * 1024)
 
 static size_t sram_free(void)
 {
@@ -199,9 +202,9 @@ extern "C" void *cbm_port_calloc(size_t n, size_t size)
 
 extern "C" void cbm_port_free(void *p)
 {
-    if (p == nullptr)
+    if (p == nullptr || ((uintptr_t)p >= XIP_BASE && (uintptr_t)p < XIP_BASE + 0x1000000))
     {
-        return;
+        return;                         // (a ROM in flash: "ROMs in flash")
     }
     if (is_psram(p))
     {
@@ -290,42 +293,202 @@ static const char *const c128_drive_names[] = { "1571.rom", "dos1571", "1571-rom
 
 static bool romNoRoom;                  // a ROM was found, but there was no memory for it
 
-// One ROM image of exactly `size` bytes, from the first folder that has it (placed as
-// alloc_block does). NULL if none, or no room for it (romNoRoom).
-static uint8_t *load_rom(const char *const *names, size_t size, Where where = Where::SramFirst)
+// The first ROM file of exactly `size` bytes among the names, in the first folder that has
+// one: opened, its path in path. False if none.
+static bool open_rom(const char *const *names, size_t size, FIL *fil, char *path, size_t pathSize)
 {
-    char path[FF_MAX_LFN];
     for (const char *dir : rom_dirs)
     {
         for (int i = 0; names[i]; i++)
         {
-            snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
-            FIL fil;
-            if (f_open(&fil, path, FA_READ) != FR_OK)
+            snprintf(path, pathSize, "%s/%s", dir, names[i]);
+            if (f_open(fil, path, FA_READ) != FR_OK)
             {
                 continue;
             }
-            uint8_t *buf = nullptr;
-            UINT n = 0;
-            if (f_size(&fil) == size)
+            if (f_size(fil) == size)
             {
-                buf = alloc_block(size, where);
-                romNoRoom |= buf == nullptr;
-                if (buf && (f_read(&fil, buf, size, &n) != FR_OK || n != size))
-                {
-                    cbm_port_free(buf);
-                    buf = nullptr;
-                }
+                return true;
             }
-            f_close(&fil);
-            if (buf)
-            {
-                printf("ROM %s%s\n", path, is_psram(buf) ? " (PSRAM)" : "");
-                return buf;
-            }
+            f_close(fil);
         }
     }
-    return nullptr;
+    return false;
+}
+
+// One ROM image of exactly `size` bytes (open_rom), placed as alloc_block does. NULL if
+// none, or no room for it (romNoRoom).
+static uint8_t *load_rom(const char *const *names, size_t size, Where where = Where::SramFirst)
+{
+    char path[FF_MAX_LFN];
+    FIL fil;
+    if (!open_rom(names, size, &fil, path, sizeof(path)))
+    {
+        return nullptr;
+    }
+    UINT n = 0;
+    uint8_t *buf = alloc_block(size, where);
+    romNoRoom |= buf == nullptr;
+    if (buf && (f_read(&fil, buf, size, &n) != FR_OK || n != size))
+    {
+        cbm_port_free(buf);
+        buf = nullptr;
+    }
+    f_close(&fil);
+    if (buf)
+    {
+        printf("ROM %s%s\n", path, is_psram(buf) ? " (PSRAM)" : "");
+    }
+    return buf;
+}
+
+// =====================================================================================
+// ROMs in flash (boards without PSRAM)
+//
+// Without PSRAM the C64's ROMs would take 36 KB of SRAM the machine cannot spare. They are
+// kept in flash instead, in the C64_ROM_STORE_BYTES that CMakeLists.txt adds to
+// FLASH_RESERVED_TOP, just above where pico_shared puts a cartridge, and read in place.
+// initAll() runs rom_store_update() once the SD card is mounted and before core 1 starts
+// (as flashrom() writes a cartridge there): it compares the store with the files and writes
+// what differs. So the ROMs are copied once, and again only when the card has other ones
+// or something else wrote over that flash (another emulator's cartridge, pico-bootLoader).
+// =====================================================================================
+#define ROM_STORE_MAGIC 0x52344643u     // "CF4R"
+
+static const struct
+{
+    const char *const *names;
+    uint32_t size, offset;              // in the store
+} romSlots[] = {
+    { kernal_names, 8192, 0 },
+    { basic_names, 8192, 8192 },
+    { chargen_names, 4096, 16384 },
+    { drive_names, 16384, 20480 },
+};
+enum { SLOT_KERNAL, SLOT_BASIC, SLOT_CHARGEN, SLOT_DRIVE };
+
+// In the store's last sector: which slots hold their ROM
+typedef struct
+{
+    uint32_t magic, present;
+    uint8_t pad[FLASH_PAGE_SIZE - 8];
+} RomStoreHeader;
+
+static_assert(36 * 1024 <= C64_ROM_STORE_BYTES - FLASH_SECTOR_SIZE, "the ROMs and the header fit the store");
+
+// The store, or NULL: a board with PSRAM keeps the ROMs there
+static const uint8_t *rom_store(void)
+{
+    if (Frens::isPsramEnabled() || ROM_FILE_ADDR == 0 || maxRomSize <= 0)
+    {
+        return nullptr;
+    }
+    return (const uint8_t *)(ROM_FILE_ADDR + maxRomSize + 1);   // (pico_shared's flash_end + 1)
+}
+
+static const RomStoreHeader *rom_store_header(void)
+{
+    const uint8_t *store = rom_store();
+    return store ? (const RomStoreHeader *)(store + C64_ROM_STORE_BYTES - FLASH_SECTOR_SIZE) : nullptr;
+}
+
+// A ROM in the store, or NULL
+static const uint8_t *rom_in_store(int slot)
+{
+    const RomStoreHeader *h = rom_store_header();
+    if (!h || h->magic != ROM_STORE_MAGIC || !(h->present & (1u << slot)))
+    {
+        return nullptr;
+    }
+    return rom_store() + romSlots[slot].offset;
+}
+
+// The file's bytes are the store's (or `want` is false and the slot is empty)
+static bool rom_slot_current(int slot, const RomStoreHeader *h, uint8_t *buf, size_t bufSize)
+{
+    char path[FF_MAX_LFN];
+    FIL fil;
+    bool want = open_rom(romSlots[slot].names, romSlots[slot].size, &fil, path, sizeof(path));
+    bool have = h->magic == ROM_STORE_MAGIC && (h->present & (1u << slot));
+    if (!want || !have)
+    {
+        if (want)
+        {
+            f_close(&fil);
+        }
+        return want == have;
+    }
+    const uint8_t *flash = rom_store() + romSlots[slot].offset;
+    bool same = true;
+    for (uint32_t done = 0; same && done < romSlots[slot].size; done += bufSize)
+    {
+        UINT n = 0;
+        same = f_read(&fil, buf, bufSize, &n) == FR_OK && n == bufSize && memcmp(buf, flash + done, bufSize) == 0;
+    }
+    f_close(&fil);
+    return same;
+}
+
+// initAll()'s pre-video task (see above)
+static void rom_store_update(void)
+{
+    const uint8_t *store = rom_store();
+    if (!store)
+    {
+        return;
+    }
+    const RomStoreHeader *h = rom_store_header();
+    uint8_t *buf = (uint8_t *)malloc(FLASH_SECTOR_SIZE);
+    if (!buf)
+    {
+        return;
+    }
+    bool current = true;
+    for (int slot = 0; current && slot < (int)(sizeof(romSlots) / sizeof(romSlots[0])); slot++)
+    {
+        current = rom_slot_current(slot, h, buf, FLASH_SECTOR_SIZE);
+    }
+    if (current)
+    {
+        free(buf);
+        printf("ROMs in flash at 0x%08x\n", (unsigned)(uintptr_t)store);
+        return;
+    }
+    // Rewrite it all: erase, the ROMs the card has, then the header that says so
+    uint32_t ofs = (uint32_t)((uintptr_t)store - XIP_BASE);
+    printf("Copying the ROMs to flash at 0x%08x\n", (unsigned)(uintptr_t)store);
+    Frens::flashEraseSafe(ofs, C64_ROM_STORE_BYTES);
+    RomStoreHeader header;
+    memset(&header, 0xFF, sizeof(header));
+    header.magic = ROM_STORE_MAGIC;
+    header.present = 0;
+    for (int slot = 0; slot < (int)(sizeof(romSlots) / sizeof(romSlots[0])); slot++)
+    {
+        char path[FF_MAX_LFN];
+        FIL fil;
+        if (!open_rom(romSlots[slot].names, romSlots[slot].size, &fil, path, sizeof(path)))
+        {
+            continue;
+        }
+        bool ok = true;
+        for (uint32_t done = 0; ok && done < romSlots[slot].size; done += FLASH_SECTOR_SIZE)
+        {
+            UINT n = 0;
+            ok = f_read(&fil, buf, FLASH_SECTOR_SIZE, &n) == FR_OK && n == FLASH_SECTOR_SIZE;
+            if (ok)
+            {
+                Frens::flashProgramSafe(ofs + romSlots[slot].offset + done, buf, FLASH_SECTOR_SIZE);
+            }
+        }
+        f_close(&fil);
+        if (ok)
+        {
+            header.present |= 1u << slot;
+            printf("  %s\n", path);
+        }
+    }
+    Frens::flashProgramSafe(ofs + C64_ROM_STORE_BYTES - FLASH_SECTOR_SIZE, (const uint8_t *)&header, sizeof(header));
+    free(buf);
 }
 
 static bool load_machine(char *err, size_t errSize)
@@ -340,15 +503,21 @@ static bool load_machine(char *err, size_t errSize)
         mem.chargen = load_rom(c128_chargen_names, 8192);
         mem.basic = load_rom(c128_basic_names, 32768, Where::Psram);
         mem.c64rom = load_rom(c128_c64_names, 16384, Where::Psram);
-        mem.drive = load_rom(c128_drive_names, 32768, Where::Psram);
         mem.ram1 = alloc_block(65536, Where::Psram);
     }
     else
     {
-        mem.kernal = load_rom(kernal_names, 8192);
-        mem.basic = load_rom(basic_names, 8192);
-        mem.chargen = load_rom(chargen_names, 4096);
-        mem.drive = load_rom(drive_names, 16384);
+        // Without PSRAM in flash, where rom_store_update() put them
+        mem.kernal = (uint8_t *)rom_in_store(SLOT_KERNAL);
+        mem.basic = (uint8_t *)rom_in_store(SLOT_BASIC);
+        mem.chargen = (uint8_t *)rom_in_store(SLOT_CHARGEN);
+        if (mem.kernal && mem.basic && mem.chargen)
+        {
+            printf("ROMs in flash\n");
+        }
+        mem.kernal = mem.kernal ? mem.kernal : load_rom(kernal_names, 8192);
+        mem.basic = mem.basic ? mem.basic : load_rom(basic_names, 8192);
+        mem.chargen = mem.chargen ? mem.chargen : load_rom(chargen_names, 4096);
     }
     if (!mem.ram || (c128 && (!mem.vdcram || !mem.ram1)) || romNoRoom)
     {
@@ -360,9 +529,12 @@ static bool load_machine(char *err, size_t errSize)
         snprintf(err, errSize, c128 ? "C128 ROMs missing in /bios" : "C64 ROMs missing in /bios");
         return false;
     }
+    // The drive last, and optional: without its ROM, or room for it, there is no disk drive
+    mem.drive = c128 ? load_rom(c128_drive_names, 32768, Where::Psram) : (uint8_t *)rom_in_store(SLOT_DRIVE);
+    mem.drive = mem.drive ? mem.drive : load_rom(drive_names, 16384);
     if (!mem.drive)
     {
-        printf("No %s ROM: no disk drive\n", c128 ? "1571" : "1541");
+        printf("%s ROM: no disk drive\n", romNoRoom ? "No room for the drive's" : c128 ? "No 1571" : "No 1541");
     }
     printf("RAM in %s, %u bytes of SRAM left\n", is_psram(mem.ram) ? "PSRAM" : "SRAM", (unsigned)sram_free());
     return true;
@@ -1512,6 +1684,12 @@ static const MenuEmulatorOption c64Options[] = {
 #define MEDIA_MAX_NAME   64             // longer names are left out rather than cut
 #define MEDIA_MAX_LISTED 68             // what the menu's list takes, less its own rows
 
+// Without PSRAM fewer, in SRAM: the closest to the game's name, as when there are more
+static int media_capacity(void)
+{
+    return Frens::isPsramEnabled() ? MEDIA_MAX_LISTED : 24;
+}
+
 typedef struct
 {
     char name[MEDIA_MAX_NAME];
@@ -1577,7 +1755,7 @@ static void media_refresh(MediaList *l)
 {
     if (!l->entries)
     {
-        l->entries = (MediaEntry *)cbm_port_malloc(sizeof(MediaEntry) * MEDIA_MAX_LISTED);   // (PSRAM if any)
+        l->entries = (MediaEntry *)cbm_port_malloc(sizeof(MediaEntry) * media_capacity());   // (PSRAM if any)
         if (!l->entries)
         {
             l->count = 0;
@@ -1602,7 +1780,7 @@ static void media_refresh(MediaList *l)
         int score = strcasecmp(fno.fname, l->made) == 0 || strcasecmp(fno.fname, inUse) == 0
                         ? MEDIA_MAX_NAME : common_prefix(fno.fname, mediaReference);
         int slot = l->count;
-        if (l->count == MEDIA_MAX_LISTED)
+        if (l->count == media_capacity())
         {
             // Full: it takes the place of the least alike, if it is more alike
             slot = 0;
@@ -2259,6 +2437,7 @@ int main()
     printf("==========================================================================================\n");
 
     FrensSettings::initSettings(FrensSettings::C64);
+    Frens::setPreVideoInitTask(rom_store_update);   // (without PSRAM: the ROMs into flash)
     isFatalError = !Frens::initAll(selectedRom, CPUFreqKHz, 0, 0, AUDIOBUFFERSIZE, false, true);
     // All of SRAM's heap claimed once (initAll does it only without PSRAM): newlib's
     // malloc would otherwise sbrk a whole big block even when most of it is free at the
@@ -2333,6 +2512,7 @@ int main()
         cfg.vdc_ram = mem.vdcram;
         cfg.drive_rom = mem.drive;
         cfg.line = c64_line;
+        cfg.audio_events = Frens::isPsramEnabled() ? 0 : 1024;     // without PSRAM a frame's worth
         disks.ext[2] = model == CBM_MODEL_C128 ? ".d71" : nullptr;
         cbm_audio_enable(true);
         audio_park();
@@ -2416,8 +2596,14 @@ int main()
                 }
                 else if (rval == 5)     // Reset game
                 {
-                    // As switching the C64 off and on: disk and cartridge stay in
+                    // As switching the C64 off and on: disk, cartridge and tape stay in. A tape
+                    // the game was started from goes back to its start, for the LOAD typed again
                     cbm_reset();
+                    if (media == Media::Tape && cbm_tape_path())
+                    {
+                        cbm_tape_rewind();
+                        cbm_tape_play(true);
+                    }
                     autostart_begin(selectedRom);
                     serial_keyboard_cancel();
                     frame = 0;

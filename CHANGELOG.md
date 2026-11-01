@@ -46,6 +46,8 @@ First release.
   keypad.
 - **Serial keyboard**: text sent to the board's serial console is typed into the computer,
   such as a BASIC listing pasted from a PC or CP/M commands.
+- **Boards without PSRAM** run the C64 too: the first start copies the ROMs from the SD card
+  into the board's flash, which takes a few seconds.
 - Builds for all 12 RP2350 board configurations, plus the
   [pico-bootLoader](https://github.com/PicoPlus-devel/pico-bootLoader) variant.
 
@@ -53,7 +55,7 @@ First release.
 
 - PAL only; the picture does not show the side borders.
 - Tapes load at the speed of a real datasette.
-- Not available yet: the RAM Expansion Unit, save states.
+- Not available yet: NTSC machines, the RAM Expansion Unit, save states.
 
 <a name="downloads___"></a>
 ## Downloads by configuration

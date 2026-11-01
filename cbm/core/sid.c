@@ -24,7 +24,7 @@
  * the PAL frame rate is 50.125 Hz)
  */
 #define CYCLES_PER_SAMPLE_Q16 ((uint32_t)(((uint64_t)CBM_FRAME_CYCLES << 16) / (CBM_AUDIO_HZ / CBM_SCREEN_HZ)))
-#define EVENT_QUEUE         2048            /* power of two */
+#define EVENT_QUEUE         2048            /* by default (cfg.audio_events) */
 
 /* ---- One voice: shared by the emulation side (voice 3) and the render side ---- */
 
@@ -173,6 +173,7 @@ static struct {
     uint64_t v3_time;
     bool enabled;
     sid_event_t *queue;
+    uint32_t queue_size;                    /* events, a power of two */
     volatile uint32_t head, tail;
     volatile uint32_t now;                  /* (low 32 bits of the clock: one access across cores) */
     uint32_t dropped;
@@ -194,11 +195,11 @@ static void push_event(uint8_t reg, uint8_t value)
         return;
     }
     uint32_t head = sid.head;
-    if (head - __atomic_load_n(&sid.tail, __ATOMIC_ACQUIRE) >= EVENT_QUEUE) {
+    if (head - __atomic_load_n(&sid.tail, __ATOMIC_ACQUIRE) >= sid.queue_size) {
         sid.dropped++;
         return;
     }
-    sid_event_t *e = &sid.queue[head % EVENT_QUEUE];
+    sid_event_t *e = &sid.queue[head & (sid.queue_size - 1)];
     e->time = t;
     e->reg = reg;
     e->value = value;
@@ -368,8 +369,9 @@ int CBM_HOT cbm_audio_render(int16_t *dst, int frames)
             break;
         }
         uint32_t head = __atomic_load_n(&sid.head, __ATOMIC_ACQUIRE);
-        while (tail != head && before(sid.queue[tail % EVENT_QUEUE].time, end)) {
-            synth_write(sid.queue[tail % EVENT_QUEUE].reg, sid.queue[tail % EVENT_QUEUE].value);
+        while (tail != head && before(sid.queue[tail & (sid.queue_size - 1)].time, end)) {
+            const sid_event_t *e = &sid.queue[tail & (sid.queue_size - 1)];
+            synth_write(e->reg, e->value);
             tail++;
         }
         int16_t s = sample(step >> 16);
@@ -397,7 +399,9 @@ void cbm_audio_enable(bool enable)
 void sid_init(void)
 {
     if (sid.enabled && sid.queue == NULL) {
-        sid.queue = cbm_malloc(EVENT_QUEUE * sizeof(sid_event_t));
+        uint32_t n = cbm.cfg.audio_events ? cbm.cfg.audio_events : EVENT_QUEUE;
+        sid.queue = cbm_malloc(n * sizeof(sid_event_t));
+        sid.queue_size = sid.queue ? n : 0;
     }
     sid.head = sid.tail = 0;
     uint32_t now = (uint32_t)cbm_now();
