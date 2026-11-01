@@ -1,0 +1,40 @@
+pico-c64
+========
+
+This project combines code under several licences. All of them must be preserved.
+
+-------------------------------------------------------------------------------
+Commodore 64/128 emulation core (cbm/core, except fastload.c and tape.c)
+-------------------------------------------------------------------------------
+From esp32cbm, Copyright (c) 2026 Robert Lucencic -
+https://github.com/rlucencic/esp32cbm. MIT licence; the full text is in
+cbm/LICENSE.esp32cbm. The changes made in this project are listed in
+cbm/UPSTREAM.md.
+
+-------------------------------------------------------------------------------
+6502 and Z80 CPU cores (cbm/m6502, cbm/z80) and cbm/port/emudbg.h
+-------------------------------------------------------------------------------
+From esp32emu, Copyright (c) 2026 Robert Lucencic -
+https://github.com/rlucencic/esp32emu. MIT licence; the full text is in
+cbm/LICENSE.esp32emu.
+
+-------------------------------------------------------------------------------
+Port glue, front end and build system (main.cpp, splash.cpp,
+cbm/core/fastload.c, cbm/core/tape.c, cbm/port, hosttest, tools,
+CMakeLists.txt, scripts)
+-------------------------------------------------------------------------------
+Copyright (c) 2026 Frank Hoedemakers. Same terms as the rest of the emulator
+family (pico-infonesPlus and others): the GNU General Public License,
+version 3.
+
+-------------------------------------------------------------------------------
+Submodules
+-------------------------------------------------------------------------------
+pico_shared, pico_lib and tusb_xinput carry their own licences; see each
+repository.
+
+-------------------------------------------------------------------------------
+Commodore ROMs
+-------------------------------------------------------------------------------
+The Commodore 64, Commodore 128, 1541 and 1571 ROMs are not part of this
+project and are not distributed with it. Users supply them on the SD card.

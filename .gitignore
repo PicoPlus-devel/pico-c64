@@ -1,0 +1,29 @@
+# Build output
+**/build*/
+releases/
+releases_bl/
+*.o
+*.uf2
+*.elf
+
+# Host harness
+hosttest/c64_host
+hosttest/out*/
+*.ppm
+
+# Commodore ROMs and test media are never tracked
+bios/
+roms/
+*.rom
+*.d64
+*.g64
+*.d71
+*.tap
+*.t64
+*.prg
+*.crt
+
+*Zone.Identifier
+.vscode
+.claude
+__pycache__/
