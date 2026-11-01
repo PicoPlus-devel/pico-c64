@@ -244,6 +244,32 @@ void cbm_type(const char *text);
 /* The key for an ASCII character (*shift: with SHIFT); -1 if none */
 int cbm_ascii_key(char c, bool *shift);
 
+/* A keyboard over a serial line (a pasted listing, a test script): one
+ * character, its key held until the machine has read it and let go until it
+ * has seen it up, so nothing is lost while BASIC or a drive is busy; with the
+ * KERNAL running, also not while its keyboard buffer is full. Letters without
+ * SHIFT whatever their case (a listing in capitals types as BASIC keywords),
+ * Ctrl-A to Ctrl-Z with CTRL, Tab and Esc the C128's TAB and ESC (on a C64
+ * space and RUN/STOP), Backspace DEL, _ the left arrow, \ the pound sign,
+ * Ctrl-] 40/80 DISPLAY, Ctrl-^ RESTORE.
+ * Nothing while a drive's motor runs (CP/M throws away what is typed while
+ * it reloads after a command), and after a reset nothing until BASIC first
+ * waits for a key (the KERNAL clears its buffer while it starts), or 15 s. Not while cbm_run_frame() runs. True: taken (or skipped: no key
+ * for it); false: still typing the one before, the buffer is full or the
+ * machine is starting - again after the next frame.
+ */
+enum { CBM_MOD_SHIFT = 1, CBM_MOD_CTRL = 2, CBM_MOD_CBM = 4 };
+bool cbm_type_serial(char c);
+bool cbm_typing(void);                      /* cbm_type() or cbm_type_serial() still busy */
+
+/* The text screen shown now, for a console: the VIC's 40 x 25 or, on a C128
+ * in 80 columns, the VDC's (as ASCII under CP/M, which puts an ASCII font
+ * there); lines without their trailing spaces, letters as the character set
+ * shows them, graphics as '#'. At most size - 1
+ * characters and a '\0'; returns the length.
+ */
+int cbm_screen_text(char *out, int size);
+
 enum {
     CBM_JOY_UP = 0x01, CBM_JOY_DOWN = 0x02, CBM_JOY_LEFT = 0x04, CBM_JOY_RIGHT = 0x08,
     CBM_JOY_FIRE = 0x10,

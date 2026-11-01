@@ -83,6 +83,16 @@ void vic_mem_changed(void)
     s_mem_id++;
 }
 
+/* The text screen as the VIC shows it (cbm_screen_text()) */
+bool vic_text(uint8_t codes[1000])
+{
+    uint16_t vm = (r[0x18] & 0xF0) << 6;
+    for (int i = 0; i < 1000; i++) {
+        codes[i] = vmem(vm + i);
+    }
+    return r[0x18] & 0x02;
+}
+
 void vic_set_bank(uint8_t bank)
 {
     vic_catch_up();

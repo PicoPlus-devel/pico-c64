@@ -113,13 +113,25 @@ so the core can be updated from upstream again.
     `cbm_ram_bank()` wherever the MMU picks a bank). `cfg.vdc_ram` gives the
     VDC 16 KB of the board's (a C128 with 4416 chips: addresses wrap at
     16 KB) instead of 64 KB of its own. Without `cfg.vdc_frame` the board
-    asks for each 80-column line as it scans it out, `cbm_vdc_line()`: 640
-    pixels, 8 a character cell, in the board's colours (the same picture as
-    `draw()`, without the stretch to 800). `cbm_status_t.c128_mode`. With
+    draws the 80 columns itself, line by line with `cbm_vdc_line()`: 640
+    pixels, 8 a character cell, as RGBI colour numbers two to a byte (the
+    same picture as `draw()`, without the stretch to 800), when
+    `cbm_screen_signature()` changes. `cbm_status_t.c128_mode`. With
     `CBM_PORT` the Z80 (`Z80_HOT`) and the MMU's paths (`c128_mem_update()`,
     page $FF, the Z80's memory) and the VDC's registers go to SRAM. BASIC 7,
     a D71 SAVE and LOAD, GO64 and CP/M 3.0 (the system disk from zimmers.net)
     behave as before on the host with this layout.
+
+16. `core/input.c`, `core/cbm.c`, `core/vic.c`, `core/vdc.c`, `core/cbm_internal.h`,
+    `core/include/cbm.h`: a keyboard over a serial line, `cbm_type_serial()`. Each key is
+    held until the machine has read its row on its own (CIA 1 port B read with that row
+    selected alone, `input_rows_read()`), and let go until a read sees it up; modifiers
+    go down first and come up last, as CP/M scans one row an interrupt. The next key
+    waits while the KERNAL's keyboard buffer is full, while a drive's motor runs (CP/M
+    drops what is typed while it reloads), and after a reset until BASIC first waits for
+    a key. `cbm_screen_text()`: the text screen shown, for a console (VIC or VDC, ASCII
+    under CP/M). `cbm_vdc_line()` decodes a character row once and expands 8 pixels with
+    one lookup. Compile-time logs `CBM_VDC_LOG`, `CBM_FEED_LOG`.
 
 ## Known problems
 

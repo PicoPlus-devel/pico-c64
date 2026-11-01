@@ -390,10 +390,14 @@ static uint8_t cia1_in(cia_t *c, int port)
     if (port == 0) {
         return input_rows(outputs(c, 1)) & input_joystick(2);
     }
-    uint8_t v = input_columns(outputs(c, 0)) & input_joystick(1);
+    uint8_t rows = outputs(c, 0);
+    uint8_t v = input_columns(rows) & input_joystick(1);
+    uint16_t k = 0;
     if (cbm.cfg.model == CBM_MODEL_C128) {
         v &= input_k_columns(vic_d02f);  /* the C128's keys on K0-K2 */
+        k = (uint16_t)(~vic_d02f & 7) << 8;
     }
+    input_rows_read((uint8_t)~rows | k);
     return v;
 }
 
@@ -731,6 +735,62 @@ void cbm_render_line_rgb565(int y, uint16_t *dst)
     } else if (y >= 0 && y < CBM_SCREEN_HEIGHT && cbm.cfg.frame) {
         memcpy(dst, cbm.cfg.frame + y * CBM_SCREEN_WIDTH, CBM_SCREEN_WIDTH * sizeof(uint16_t));
     }
+}
+
+/* A screen code as text: letters as the character set shows them, graphics '#' */
+static char screen_char(uint8_t code, bool lower)
+{
+    code &= 0x7F;                       /* (reversed: the same) */
+    if (code == 0) {
+        return '@';
+    }
+    if (code <= 26) {
+        return (lower ? 'a' : 'A') + code - 1;
+    }
+    if (code < 32) {
+        return "[\\]^_"[code - 27];     /* pound sign, up and left arrows */
+    }
+    if (code < 64) {
+        return code;
+    }
+    if (lower && code >= 65 && code <= 90) {
+        return code;                    /* upper case in the second set */
+    }
+    return code == 96 ? ' ' : '#';
+}
+
+/* CP/M's 80 columns: its own font in the VDC's RAM, in ASCII order */
+static char ascii_char(uint8_t code, bool lower)
+{
+    (void)lower;
+    code &= 0x7F;
+    return code >= 32 && code < 127 ? code : '#';
+}
+
+int cbm_screen_text(char *out, int size)
+{
+    if (showing_vdc()) {
+        return vdc_text(out, size, c128_z80_active() ? ascii_char : screen_char);
+    }
+    uint8_t codes[1000];
+    bool lower = vic_text(codes);
+    int n = 0;
+    for (int row = 0; row < 25; row++) {
+        int start = n, end = n;
+        for (int col = 0; col < 40 && n < size - 2; col++) {
+            char c = screen_char(codes[row * 40 + col], lower);
+            out[n++] = c;
+            if (c != ' ') {
+                end = n;
+            }
+        }
+        n = end > start ? end : start;
+        if (n < size - 1) {
+            out[n++] = '\n';
+        }
+    }
+    out[n < size ? n : size - 1] = 0;
+    return n;
 }
 
 void cbm_screen_invalidate(void)

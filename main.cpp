@@ -19,6 +19,8 @@
 #include "hardware/clocks.h"
 #include "hardware/vreg.h"
 #include "hardware/watchdog.h"
+#include "hardware/uart.h"
+#include "hardware/irq.h"
 #include "ff.h"
 #include "tusb.h"
 
@@ -62,6 +64,27 @@ extern "C"
 #define OVERCLOCK_SETTING 1
 #else
 #define OVERCLOCK_SETTING 0
+#endif
+
+// The serial keyboard reads the stdio UART's RX pin, so only where a board has a UART console
+// and does not use that pin for something else (see "Serial keyboard" below)
+#if defined(LIB_PICO_STDIO_UART) && defined(PICO_DEFAULT_UART_RX_PIN)
+#define SERIAL_RX_PIN_CLAIMED (                                                  \
+       PICO_DEFAULT_UART_RX_PIN == NES_PIN_CLK                                   \
+    || PICO_DEFAULT_UART_RX_PIN == NES_PIN_DATA                                  \
+    || PICO_DEFAULT_UART_RX_PIN == NES_PIN_LAT                                   \
+    || PICO_DEFAULT_UART_RX_PIN == NES_PIN_CLK_1                                 \
+    || PICO_DEFAULT_UART_RX_PIN == NES_PIN_DATA_1                                \
+    || PICO_DEFAULT_UART_RX_PIN == NES_PIN_LAT_1                                 \
+    || PICO_DEFAULT_UART_RX_PIN == WII_PIN_SDA                                   \
+    || PICO_DEFAULT_UART_RX_PIN == WII_PIN_SCL                                   \
+    || PICO_DEFAULT_UART_RX_PIN == SDCARD_PIN_CS                                 \
+    || PICO_DEFAULT_UART_RX_PIN == SDCARD_PIN_SCK                                \
+    || PICO_DEFAULT_UART_RX_PIN == SDCARD_PIN_MOSI                               \
+    || PICO_DEFAULT_UART_RX_PIN == SDCARD_PIN_MISO)
+#define SERIAL_KEYBOARD_AVAILABLE (!SERIAL_RX_PIN_CLAIMED)
+#else
+#define SERIAL_KEYBOARD_AVAILABLE 0
 #endif
 
 // PicoDVI's audio ring takes a whole frame (882 samples) with room to spare
@@ -108,6 +131,7 @@ static void init_settings_visibility(void)
     v[MOPT_CASSETTE] = 1;
     v[MOPT_ENTER_BOOTSEL_MODE] = 1;
     v[MOPT_CONTROLLER_TEST] = 1;
+    v[MOPT_SERIAL_KEYBOARD] = SERIAL_KEYBOARD_AVAILABLE;   // hidden where the board has no UART RX
     g_settings_visibility = g_settings_visibility_c64;
 }
 
@@ -146,7 +170,8 @@ static bool is_psram(const void *p)
 
 extern "C" void *cbm_port_malloc(size_t n)
 {
-    if (n >= CBM_SRAM_BIG && Frens::isPsramEnabled())
+    // Small blocks in SRAM while it has room; with PSRAM, what does not fit goes there too
+    if (Frens::isPsramEnabled() && (n >= CBM_SRAM_BIG || n + CBM_SRAM_RESERVE > sram_free()))
     {
         return Frens::f_malloc(n);
     }
@@ -1107,6 +1132,215 @@ static void release_input(void)
     runStopFrames = 0;
 }
 
+// =====================================================================================
+// Serial keyboard (Settings, Serial keyboard): text arriving on the UART console is typed
+// into the machine - a BASIC listing pasted into a terminal, CP/M commands, a test script.
+// Ctrl-] is 40/80 DISPLAY and Ctrl-^ RESTORE (see cbm_type_serial()).
+//
+// As in pico-994A: the UART interrupt fills a ring (16 KB in PSRAM; 4 KB of SRAM on a board
+// without), XON/XOFF holds the sender off before it is full, and what a sender still had queued when a game starts or a paste is
+// abandoned is thrown away. Each character goes to cbm_type_serial(), which holds its key
+// until the machine has read it, so the paste runs as fast as the machine takes it. A key
+// on the USB keyboard abandons the paste. Ctrl-\ is not typed: it prints the text screen
+// shown (40 or 80 columns) on the console.
+//
+// UART only, and only where the board leaves its RX pin to it: stdio only ever transmitted,
+// so a pin map that hands RX to something else (HW_CONFIG 1 puts a NES controller's clock
+// there) builds without the option (SERIAL_KEYBOARD_AVAILABLE, at the top). HW_CONFIG 11,
+// 12 and 13 have no UART console at all.
+// =====================================================================================
+
+#if SERIAL_KEYBOARD_AVAILABLE && defined(uart_default)
+// A power of two (the indices are masked). With PSRAM big enough for a whole listing without
+// XOFF: holding off a sender that is about to finish can strand its last bytes (pico-994A).
+static unsigned serialRingSize;         // 0 until serial_keyboard_init()
+static constexpr uint32_t SERIAL_DISCARD_QUIET_US = 500000;
+static constexpr uint8_t ASCII_XON = 0x11;
+static constexpr uint8_t ASCII_XOFF = 0x13;
+static constexpr uint8_t SERIAL_SCREEN = 0x1C;  // Ctrl-\: print the screen
+
+static uint8_t *serialRing;
+// head advanced by the interrupt, tail by the frame loop: single producer, single consumer
+static volatile unsigned serialHead = 0, serialTail = 0;
+static uint8_t serialPrevByte = 0;                  // interrupt side only
+static volatile bool serialDiscarding = false;      // swallowing a sender's leftover queue
+static volatile uint32_t serialDiscardUntil = 0;
+static volatile bool serialOverflowed = false;
+static volatile uint32_t serialRxCount = 0;
+static volatile uint32_t serialLastRxUs = 0;
+static uint32_t serialTypedCount = 0;
+static bool serialOverflowWarned = false;
+static bool serialXoffSent = false;
+static bool serialXoffUsed = false;
+
+static inline unsigned serialRingUsed(void) { return (serialHead - serialTail) & (serialRingSize - 1); }
+
+// Drained by interrupt: the frame loop sleeps until the next frame for much of the time,
+// and the UART's 32-byte FIFO overruns in 2.8 ms at 115200 baud
+static void __not_in_flash_func(serialUartIrq)(void)
+{
+    while (uart_is_readable(uart_default))
+    {
+        uint8_t c = (uint8_t)uart_get_hw(uart_default)->dr;    // reading DR clears RX/RT
+        if (!settings.flags.serialKeyboard || c == ASCII_XON || c == ASCII_XOFF)
+        {
+            continue;
+        }
+        if (serialDiscarding)
+        {
+            serialDiscardUntil = time_us_32() + SERIAL_DISCARD_QUIET_US;
+            continue;
+        }
+        // CRLF is one RETURN: the LF after a CR is dropped
+        bool lfAfterCr = c == '\n' && serialPrevByte == '\r';
+        serialPrevByte = c;
+        if (lfAfterCr)
+        {
+            continue;
+        }
+        unsigned next = (serialHead + 1) & (serialRingSize - 1);
+        if (next == serialTail)
+        {
+            serialOverflowed = true;
+            continue;
+        }
+        serialRing[serialHead] = c;
+        serialHead = next;
+        serialRxCount++;
+        serialLastRxUs = time_us_32();
+    }
+}
+
+// After initAll(), which finds the PSRAM
+static void serial_keyboard_init(void)
+{
+    serialRingSize = Frens::isPsramEnabled() ? 16384 : 4096;
+    serialRing = Frens::isPsramEnabled() ? (uint8_t *)Frens::f_malloc(serialRingSize) : (uint8_t *)malloc(serialRingSize);
+    // A disconnected RX left floating would frame garbage into the machine
+    gpio_pull_up(PICO_DEFAULT_UART_RX_PIN);
+    // stdio_uart claims the interrupt only for a chars-available callback, which nothing
+    // registers; TX stays with stdio
+    uint irqNum = UART_IRQ_NUM(uart_default);
+    irq_set_exclusive_handler(irqNum, serialUartIrq);
+    irq_set_enabled(irqNum, true);
+    uart_set_irqs_enabled(uart_default, true, false);
+    printf("Serial keyboard: UART RX on GPIO %d\n", PICO_DEFAULT_UART_RX_PIN);
+}
+
+// Drop what is queued; what the sender still has in flight is thrown away too
+static void serial_keyboard_cancel(void)
+{
+    serialTail = serialHead;
+    serialPrevByte = 0;
+    serialOverflowed = false;
+    serialOverflowWarned = false;
+    serialDiscardUntil = time_us_32() + SERIAL_DISCARD_QUIET_US;
+    serialDiscarding = true;
+    serialRxCount = 0;
+    serialTypedCount = 0;
+    serialXoffUsed = false;
+    if (serialXoffSent)
+    {
+        putchar_raw(ASCII_XON);
+        serialXoffSent = false;
+    }
+}
+
+// The text screen on the console: up to 80 x 50 (the C128, which needs PSRAM), else 40 x 25
+static void serial_print_screen(void)
+{
+    char small[41 * 25 + 1];
+    bool big = Frens::isPsramEnabled();
+    int size = big ? 81 * 50 + 1 : (int)sizeof(small);
+    char *text = big ? (char *)Frens::f_malloc(size) : small;
+    cbm_screen_text(text, size);
+    printf("--- screen ---\n%s--- end of screen ---\n", text);
+    if (big)
+    {
+        Frens::f_free(text);
+    }
+}
+
+// Once a frame, between frames
+static void serial_keyboard_tick(void)
+{
+    if (!settings.flags.serialKeyboard || !serialRingSize)
+    {
+        if (serialRingSize && serialRingUsed())
+        {
+            serial_keyboard_cancel();
+        }
+        return;
+    }
+    if (serialDiscarding && (int32_t)(time_us_32() - serialDiscardUntil) > 0)
+    {
+        serialDiscarding = false;
+    }
+    if (serialOverflowed && !serialOverflowWarned)
+    {
+        serialOverflowWarned = true;
+        printf("\nSerial keyboard: input overflow - enable XON/XOFF flow control\n");
+    }
+    // A paste is over once everything is typed and nothing has come for a second: the
+    // totals tell "never received" from "mistyped". Anything echoed back by the sender
+    // is then swallowed rather than typed.
+    if (serialRxCount && !serialRingUsed() && !cbm_typing() && (int32_t)(time_us_32() - serialLastRxUs) > 1000000)
+    {
+        if (serialRxCount >= 100)
+        {
+            printf("\nSerial keyboard: %u characters received, %u typed%s\n", (unsigned)serialRxCount,
+                   (unsigned)serialTypedCount, serialXoffUsed ? " (flow control was used)" : "");
+            serialDiscardUntil = time_us_32() + SERIAL_DISCARD_QUIET_US;
+            serialDiscarding = true;
+        }
+        serialRxCount = 0;
+        serialTypedCount = 0;
+        serialXoffUsed = false;
+    }
+    if (!serialXoffSent && serialRingUsed() > serialRingSize * 3 / 4)
+    {
+        putchar_raw(ASCII_XOFF);
+        serialXoffSent = serialXoffUsed = true;
+    }
+    else if (serialXoffSent && serialRingUsed() < serialRingSize / 4)
+    {
+        putchar_raw(ASCII_XON);
+        serialXoffSent = false;
+    }
+    // A hand on the USB keyboard wins
+    const auto &kb = io::getCurrentKeyboardState();
+    if (kb.connected && (kb.keycode[0] || kb.modifier))
+    {
+        if (serialRingUsed())
+        {
+            serial_keyboard_cancel();
+        }
+        return;
+    }
+    while (serialRingUsed())
+    {
+        uint8_t c = serialRing[serialTail];
+        if (c == SERIAL_SCREEN)
+        {
+            serial_print_screen();
+        }
+        else if (!cbm_type_serial((char)c))
+        {
+            break;                      // the one before is still being typed
+        }
+        else
+        {
+            serialTypedCount++;
+        }
+        serialTail = (serialTail + 1) & (serialRingSize - 1);
+    }
+}
+#else
+static void serial_keyboard_init(void) {}
+static void serial_keyboard_cancel(void) {}
+static void serial_keyboard_tick(void) {}
+#endif
+
 // Tracks of a disk kept in memory: with PSRAM the whole disk (as GCR, about 300 KB);
 // without, two, read from the card as the drive's head gets to them. A developer build
 // can force the cache (-DC64_DISK_CACHE=<tracks>) to try it on a board with PSRAM.
@@ -1633,6 +1867,12 @@ static void ensure_basic_markers(void)
 // and .g64 disks when the Machine setting says so; the C64 for everything else
 static cbm_model_t pick_model(const char *path)
 {
+#if defined(C64_AUTOSTART) && defined(C64_AUTOSTART_C128)
+    if (strcmp(path, C64_AUTOSTART) == 0 && c128_possible())
+    {
+        return CBM_MODEL_C128;          // developer option: the autostart file on a C128
+    }
+#endif
     const char *ext = strrchr(path, '.');
     if (ext && (!strcasecmp(ext, ".c128") || !strcasecmp(ext, ".d71")))
     {
@@ -2033,6 +2273,7 @@ int main()
     // top of the heap, and fail - or panic - with the memory sram_free() counts
     Frens::claimHeap();
     Frens::dumpHeapStats("claimHeap");
+    serial_keyboard_init();
 
     init_settings_visibility();
 #if HSTX
@@ -2115,6 +2356,7 @@ int main()
         Frens::dumpHeapStats("machine running");
         cbm_screen_invalidate();
         release_input();
+        serial_keyboard_cancel();       // a new game: nothing left over from before
         joystick_port = c64opt.joystickPort;    // Select+A swaps it for this game only
         c128Mode = false;
         media_set_folder(selectedRom);
@@ -2130,6 +2372,7 @@ int main()
         {
             paceFrame(false);
             processPerFrame();
+            serial_keyboard_tick();
             autostart_tick(selectedRom, frame);
             disk_flush_tick(frame++);
 
@@ -2184,6 +2427,7 @@ int main()
                     // As switching the C64 off and on: disk and cartridge stay in
                     cbm_reset();
                     autostart_begin(selectedRom);
+                    serial_keyboard_cancel();
                     frame = 0;
                 }
                 overlay_end();

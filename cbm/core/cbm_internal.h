@@ -127,6 +127,7 @@ extern bool vic_chars_all_banks;        /* C128 mode: in all four */
 void vic_mem_changed(void);             /* one of those changed (vic_catch_up() first) */
 void vic_cpu_stall(void *ctx, m6502_t *cpu);
 uint32_t vic_signature(void);
+bool vic_text(uint8_t codes[1000]);     /* the video matrix; true: the second (lower case) set */
 
 /* ---- vdc.c: the C128's 80 columns ---- */
 
@@ -136,6 +137,7 @@ uint8_t vdc_read(uint16_t a);           /* $D600/$D601 */
 void vdc_write(uint16_t a, uint8_t v);
 void vdc_frame_end(bool shown);
 uint32_t vdc_signature(void);
+int vdc_text(char *out, int size, char (*conv)(uint8_t code, bool lower));
 
 /* ---- sid.c ---- */
 
@@ -159,6 +161,10 @@ uint8_t input_joystick(int port);           /* active-low bits 0-4 */
 bool input_restore(void);                   /* RESTORE is down */
 bool input_caps_lock(void);
 bool input_40_80(void);
+/* CIA 1's port B was read with these rows selected (bits 0-7 port A's rows,
+ * 8-10 the C128's K0-K2): for cbm_type_serial()
+ */
+void input_rows_read(uint16_t rows);
 
 /* ---- iec.c, drive.c: the serial bus and the drives ---- */
 

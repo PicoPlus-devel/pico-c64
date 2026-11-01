@@ -220,6 +220,10 @@ if(C64_AUTOSTART)
     message(STATUS "Autostart: ${C64_AUTOSTART}")
     target_compile_definitions(${projectname} PRIVATE C64_AUTOSTART="${C64_AUTOSTART}")
 endif()
+# ... on a C128 (a .d64 such as the CP/M system disk): -DC64_AUTOSTART_C128=ON
+if(C64_AUTOSTART_C128)
+    target_compile_definitions(${projectname} PRIVATE C64_AUTOSTART_C128=1)
+endif()
 
 if(NOT PICO_PLATFORM STREQUAL "rp2040")
     message(STATUS "Using PICO_PIO_USE_GPIO_BASE=1 for non-rp2040 platforms.")

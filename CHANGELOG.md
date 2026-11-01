@@ -44,6 +44,8 @@ First release.
 - **USB keyboard** in a US layout (keys type what is printed on them) or the C64's own layout.
 - **Two joysticks** from USB gamepads, NES/SNES controllers, Wii controllers or the numeric
   keypad.
+- **Serial keyboard**: text sent to the board's serial console is typed into the computer,
+  such as a BASIC listing pasted from a PC or CP/M commands.
 - Builds for all 12 RP2350 board configurations, plus the
   [pico-bootLoader](https://github.com/PicoPlus-devel/pico-bootLoader) variant.
 
@@ -51,7 +53,7 @@ First release.
 
 - PAL only; the picture does not show the side borders.
 - Tapes load at the speed of a real datasette.
-- Not available yet: typing text over the serial port, the RAM Expansion Unit, save states.
+- Not available yet: the RAM Expansion Unit, save states.
 
 <a name="downloads___"></a>
 ## Downloads by configuration

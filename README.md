@@ -46,8 +46,10 @@ menu: [pico-bootLoader](https://github.com/PicoPlus-devel/pico-bootLoader).
   80-column screens, 2 MHz mode, C64 mode, the Z80 and CP/M 3.0, and a 1571 drive with
   `.d71` images. See [Commodore 128](#commodore-128).
 
-Not available yet: typing text over the serial port, NTSC machines, the RAM Expansion Unit
-and save states. See [Not yet done](#not-yet-done).
+- **Typing over the serial port**: text sent to the board's UART console is typed into
+  the machine, see [Serial keyboard](#serial-keyboard).
+
+Not available yet: NTSC machines, the RAM Expansion Unit and save states. See [Not yet done](#not-yet-done).
 
 ***
 
@@ -234,6 +236,28 @@ by position. Tab is CTRL, Left Ctrl and Left Alt the Commodore key, Insert `£`,
 The C128's separate cursor keys and numeric keypad are not mapped: the cursor keys work as
 on the C64, and the numeric keypad remains a joystick.
 
+## Serial keyboard
+
+With **Serial keyboard** switched on in the settings menu, text sent to the board's UART
+console (115200 baud) is typed into the machine: a BASIC listing pasted into a terminal
+program, or commands for CP/M. Each key is held until the machine has read it, and typing
+waits while BASIC's keyboard buffer is full or a disk drive is running, so nothing is lost
+while a line is being processed or a program is loading. Typing runs at up to about 25
+characters a second.
+
+- Letters are typed without SHIFT, whatever their case, so a listing in capitals types as
+  BASIC keywords.
+- Return or Enter is RETURN; Backspace is DEL; Ctrl-A to Ctrl-Z are CTRL with that letter.
+- Esc is RUN/STOP on the C64 and ESC on the C128; Tab is the C128's TAB.
+- `_` is the left arrow and `\` the pound sign.
+- Ctrl-] is 40/80 DISPLAY and Ctrl-^ is RESTORE.
+- Ctrl-\ is not typed: it prints the text screen shown (40 or 80 columns) on the console.
+
+The board answers XON/XOFF when its input buffer fills; enable software flow control in the
+terminal program for long listings. A key pressed on the USB keyboard abandons what is
+still waiting to be typed. The option is not shown on boards whose UART receive pin is
+used for something else, or that have no UART console.
+
 ## Controls
 
 Gamepads are joysticks. The first is in port 2, where most games read it, and the second
@@ -266,6 +290,7 @@ Besides the settings every emulator of the family has, the settings menu offers:
 | Fast disk load | On (default) or Off |
 | Keyboard layout | US (default) or C64 |
 | Machine | C64 (default) or C128: the computer `.d64` and `.g64` disks start on. Only on boards that can run the C128. |
+| Serial keyboard | Off (default) or On: see [Serial keyboard](#serial-keyboard). A setting shared with the other emulators. |
 
 They are kept in `/settings_C64x.dat` on the SD card.
 
@@ -330,7 +355,6 @@ testing without a board; see [hosttest/README.md](hosttest/README.md).
 
 ## Not yet done
 
-- Typing text received on the serial port.
 - Faster loading of tapes.
 - `.wav` tapes.
 - NTSC machines.

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."   # repo root
 
 CFLAGS=(
   -O2 -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter
-  -DEMUDBG_OFF -DM6502_HOST_HOOK -DZ80_HOST_HOOK
+  -DEMUDBG_OFF -DM6502_HOST_HOOK ${EXTRA_CFLAGS:-} -DZ80_HOST_HOOK
   -DCONFIG_Z80_TIMING_TSTATES=1 -DCONFIG_Z80_READ_SPECIAL=1
   -I cbm/core -I cbm/core/include -I cbm/m6502/include -I cbm/z80/include -I cbm/port
 )

@@ -16,6 +16,12 @@
  *   CBM_JOY=<port>          joystick port the script's "joy" uses (default 2)
  *   CBM_SCRIPT=<file>       lines "<frame> <command>":
  *                             type <text>          type it (\n for RETURN)
+ *                             serial <text>        type it as the board's serial
+ *                                                  keyboard does (cbm_type_serial();
+ *                                                  \n RETURN, \e Esc, \t Tab,
+ *                                                  \^X Ctrl-X, \xHH), after what is queued
+ *                             screen               the text screen shown
+ *                                                  (cbm_screen_text())
  *                             key <n> 0|1          key number down / up
  *                             joy <bits>           joystick
  *                             shot <file.ppm>      screenshot
@@ -48,12 +54,16 @@
  *   CBM_QUIET               no summary
  *
  * Other compile-time logs: -DCBM_MMU_LOG (C128 MMU writes, CPU switches),
- * -DCBM_FAST_LOG (fast serial bytes, 1571 side and speed changes).
+ * -DCBM_FAST_LOG (fast serial bytes, 1571 side and speed changes),
+ * -DCBM_VDC_LOG (the VDC's block fills and copies), -DCBM_FEED_LOG (how
+ * long each key typed by cbm_type_serial() was held). Build with them:
+ * EXTRA_CFLAGS=-DCBM_VDC_LOG hosttest/build.sh
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 #include "cbm.h"
 #include "m6502.h"
 #include "z80.h"
@@ -255,11 +265,35 @@ static void unescape(char *s)
         if (s[0] == '\\' && s[1] == 'n') {
             *d++ = '\n';
             s++;
+        } else if (s[0] == '\\' && s[1] == 'e') {
+            *d++ = 0x1B;
+            s++;
+        } else if (s[0] == '\\' && s[1] == 't') {
+            *d++ = '\t';
+            s++;
+        } else if (s[0] == '\\' && s[1] == 'x' && isxdigit((unsigned char)s[2]) && isxdigit((unsigned char)s[3])) {
+            char hex[3] = { s[2], s[3], 0 };
+            *d++ = (char)strtoul(hex, NULL, 16);
+            s += 3;
+        } else if (s[0] == '\\' && s[1] == '^' && s[2] >= 'A' && s[2] <= 'Z') {
+            *d++ = s[2] - 'A' + 1;
+            s += 2;
         } else {
             *d++ = *s;
         }
     }
     *d = 0;
+}
+
+/* The serial keyboard's queue (as the board's ring) */
+static char s_serial[8192];
+static int s_serial_head, s_serial_tail;
+
+static void serial_frame(void)
+{
+    while (s_serial_tail < s_serial_head && cbm_type_serial(s_serial[s_serial_tail])) {
+        s_serial_tail++;
+    }
 }
 
 static void run_script(uint32_t frame)
@@ -269,6 +303,16 @@ static void run_script(uint32_t frame)
         if (strcmp(l->cmd, "type") == 0) {
             unescape(l->arg);
             cbm_type(l->arg);
+        } else if (strcmp(l->cmd, "serial") == 0) {
+            unescape(l->arg);
+            for (const char *c = l->arg; *c && s_serial_head < (int)sizeof(s_serial); c++) {
+                s_serial[s_serial_head++] = *c;
+            }
+        } else if (strcmp(l->cmd, "screen") == 0) {
+            static char text[80 * 51 + 1];
+            cbm_screen_text(text, sizeof(text));
+            printf("host: frame %u: screen (%s)\n%s", frame, s_serial_tail < s_serial_head ? "still typing" : "typed",
+                   text);
         } else if (strcmp(l->cmd, "key") == 0) {
             unsigned key = 0, down = 0;
             sscanf(l->arg, "%u %u", &key, &down);
@@ -467,6 +511,7 @@ int main(int argc, char **argv)
     for (int f = 0; f < frames; f++) {
         s_frame_now = f;
         run_script(f);
+        serial_frame();
         if (f == 150 && getenv("CBM_PRG") && !cbm_program_load(getenv("CBM_PRG"), true)) {
             fprintf(stderr, "can't load %s\n", getenv("CBM_PRG"));
         }
