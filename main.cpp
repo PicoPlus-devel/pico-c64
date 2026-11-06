@@ -958,12 +958,16 @@ static void __not_in_flash_func(process_audio_frame)(void)
 //
 // Both: Esc RUN/STOP, PgUp RESTORE, Home CLR/HOME, Backspace DEL, Caps Lock SHIFT LOCK,
 // F2/F4/F6/F8 shifted F1/F3/F5/F7, cursor left and up shifted right and down, F12 the
-// settings menu, the numeric keypad a joystick (8 4 6 2 and diagonals, 0 or 5 fire).
+// settings menu.
+//
+// The numeric keypad: its digits are a joystick (8 4 6 2 and diagonals, 0 or 5 fire) until
+// Num Lock is pressed, which makes them type digits and back again; / * - + . and Enter
+// always type. Typing, it is the C128's own keypad in C128 mode (BASIC 7, CP/M), with / and
+// * from the main keyboard, and the C64's keys otherwise.
 //
 // The C128's own keys (as esp32cbm maps them): F9 ESC, F10 HELP, Right Alt ALT, End LINE
 // FEED (US layout), Scroll Lock NO SCROLL, F11 or Print Screen 40/80 DISPLAY (it locks,
-// and picks the screen shown), Caps Lock CAPS LOCK in C128 mode. Its separate keypad is
-// not mapped.
+// and picks the screen shown), Caps Lock CAPS LOCK in C128 mode.
 //
 // CP/M on the C128: the arrows are the C128's separate cursor keys above the main
 // keyboard. CP/M programs move with them (SuperCalc, WordStar: CP/M makes Ctrl-E, X, S
@@ -989,6 +993,21 @@ enum
     // The C128's rows K0-K2
     K_HELP = 64, K_ESC = 72, K_LINE_FEED = 75, K_ALT = 80, K_NO_SCROLL = 87,
     K_TOP_UP = 83, K_TOP_DOWN = 84, K_TOP_LEFT = 85, K_TOP_RIGHT = 86,  // its own cursor keys
+    // ... and its numeric keypad
+    K_KP_8 = 65, K_KP_5 = 66, K_KP_2 = 68, K_KP_4 = 69, K_KP_7 = 70, K_KP_1 = 71,
+    K_KP_PLUS = 73, K_KP_MINUS = 74, K_KP_ENTER = 76, K_KP_6 = 77, K_KP_9 = 78, K_KP_3 = 79,
+    K_KP_0 = 81, K_KP_PERIOD = 82,
+};
+
+// The PC's numeric keypad, HID_KEY_KEYPAD_DIVIDE to HID_KEY_KEYPAD_DECIMAL (/ * - + Enter
+// 1-9 0 .), when it types: on a C128 in its own mode, and otherwise
+static const uint8_t keypadC128[16] = {
+    K_SLASH, K_ASTERISK, K_KP_MINUS, K_KP_PLUS, K_KP_ENTER, K_KP_1, K_KP_2, K_KP_3,
+    K_KP_4, K_KP_5, K_KP_6, K_KP_7, K_KP_8, K_KP_9, K_KP_0, K_KP_PERIOD,
+};
+static const uint8_t keypadC64[16] = {
+    K_SLASH, K_ASTERISK, K_MINUS, K_PLUS, K_RETURN, K_1, K_2, K_3,
+    K_4, K_5, K_6, K_7, K_8, K_9, K_0, K_PERIOD,
 };
 
 // For each USB HID usage, unshifted and with Shift held: the C64 key, and what the C64's
@@ -1101,6 +1120,7 @@ static bool c128Mode = false;           // a C128 in its own mode, not C64 mode 
 // there at nearly every frame's end under CP/M and never in C128 BASIC; it stays set so
 // the moments the 8502 takes the bus for the disk drive do not change what the arrows are.
 static bool cpmRunning = false;
+static bool keypadTypes = false;        // Num Lock: the keypad's digits type, not a joystick
 static uint8_t keys_down[(CBM_KEYS + 7) / 8];   // as last sent to the core
 static uint8_t prevButtons[2];
 static bool startAlone = false;         // Start went down with nothing else
@@ -1153,18 +1173,33 @@ static void update_input(void)
             case HID_KEY_PAGE_UP:
                 set_bit(want, CBM_KEY_RESTORE);
                 continue;
-            case HID_KEY_KEYPAD_8: kbJoy |= CBM_JOY_UP; continue;
-            case HID_KEY_KEYPAD_2: kbJoy |= CBM_JOY_DOWN; continue;
-            case HID_KEY_KEYPAD_4: kbJoy |= CBM_JOY_LEFT; continue;
-            case HID_KEY_KEYPAD_6: kbJoy |= CBM_JOY_RIGHT; continue;
-            case HID_KEY_KEYPAD_7: kbJoy |= CBM_JOY_UP | CBM_JOY_LEFT; continue;
-            case HID_KEY_KEYPAD_9: kbJoy |= CBM_JOY_UP | CBM_JOY_RIGHT; continue;
-            case HID_KEY_KEYPAD_1: kbJoy |= CBM_JOY_DOWN | CBM_JOY_LEFT; continue;
-            case HID_KEY_KEYPAD_3: kbJoy |= CBM_JOY_DOWN | CBM_JOY_RIGHT; continue;
-            case HID_KEY_KEYPAD_0:
-            case HID_KEY_KEYPAD_5: kbJoy |= CBM_JOY_FIRE; continue;
+            case HID_KEY_NUM_LOCK:
+                if (!wasDown)
+                {
+                    keypadTypes = !keypadTypes;
+                    osd_show(keypadTypes ? "KEYPAD: NUMBERS" : "KEYPAD: JOYSTICK");
+                }
+                continue;
             default:
                 break;
+            }
+            // The numeric keypad (see Input above)
+            if (hid >= HID_KEY_KEYPAD_DIVIDE && hid <= HID_KEY_KEYPAD_DECIMAL)
+            {
+                static const uint8_t joyDigits[10] = {      // 1-9, 0
+                    CBM_JOY_DOWN | CBM_JOY_LEFT, CBM_JOY_DOWN, CBM_JOY_DOWN | CBM_JOY_RIGHT,
+                    CBM_JOY_LEFT, CBM_JOY_FIRE, CBM_JOY_RIGHT,
+                    CBM_JOY_UP | CBM_JOY_LEFT, CBM_JOY_UP, CBM_JOY_UP | CBM_JOY_RIGHT, CBM_JOY_FIRE,
+                };
+                if (!keypadTypes && hid >= HID_KEY_KEYPAD_1 && hid <= HID_KEY_KEYPAD_0)
+                {
+                    kbJoy |= joyDigits[hid - HID_KEY_KEYPAD_1];
+                    continue;
+                }
+                int k = (c128Mode ? keypadC128 : keypadC64)[hid - HID_KEY_KEYPAD_DIVIDE];
+                set_bit(want, k);
+                if (k < 64 && shiftForce == S_AS_PC) shiftForce = S_OFF;   // what is printed on it
+                continue;
             }
             if (model == CBM_MODEL_C128)
             {

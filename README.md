@@ -327,7 +327,9 @@ by position. Tab is CTRL, Left Ctrl and Left Alt the Commodore key, Insert `£`,
 | F1, F3, F5, F7 | F1, F3, F5, F7 |
 | F2, F4, F6, F8 | SHIFT + F1, F3, F5, F7 |
 | Cursor keys | CRSR keys (left and up with SHIFT); under CP/M see below |
-| Numeric keypad | Joystick: 8 4 6 2 and the diagonals, 0 or 5 fire (Right Ctrl fires too) |
+| Numeric keypad digits | Joystick: 8 4 6 2 and the diagonals, 0 or 5 fire (Right Ctrl fires too); with Num Lock, digits |
+| Numeric keypad `/ * - + .` and Enter | Those characters and RETURN |
+| Num Lock | Switches the keypad's digits between joystick (the default) and digits |
 | F12 | Settings menu |
 
 **Commodore 128 keys:**
@@ -349,7 +351,12 @@ arrow keys are the separate cursor keys, and Shift with an arrow key is the CRSR
 editing the command line (Ctrl-A and Ctrl-F also move along it). A key held down under CP/M
 does not repeat. In C128 BASIC and C64 mode the arrow keys are the CRSR keys.
 
-The C128's numeric keypad is not mapped; the numeric keypad remains a joystick.
+**Numeric keypad.** Its digits are a joystick until Num Lock is pressed; Num Lock switches
+them to typing digits and back. The choice holds until it is pressed again or the board is
+restarted; on the 40-column screen a short note shows it. In C128 BASIC and under CP/M the
+keypad is the C128's own numeric keypad (with `/` and `*` from the main keyboard); on the
+C64 and in C64 mode it types the main keyboard's digits and characters. The keyboard's Num
+Lock light does not show the setting.
 
 ## Controllers
 
