@@ -402,7 +402,7 @@ uint8_t *gcr_track(gcr_disk_t *d, int i)
     if (old >= 0) {
         if (d->dirty[old] && !d->wp) {
             if (!write_track(d, old, d->file, NULL)) {
-                CBM_LOG("can't write %s", d->path);
+                CBM_ERROR("can't write %s", d->path);
             }
             d->dirty[old] = false;
         }

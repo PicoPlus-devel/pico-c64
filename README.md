@@ -260,10 +260,19 @@ It starts from `C128 BASIC.c128`, from a `.d71` disk, or from a `.d64` or `.g64`
 as on the CP/M system disk) is left to the C128; otherwise `RUN"*"` is typed once the C128
 is at `READY`. Programs (`.prg`, `.t64`), tapes and cartridges always start on a C64.
 
-**80 columns.** The C128 has two screens. **40/80 DISPLAY** (F11 or Print Screen) switches
-the picture between the 40-column screen and the 80-column screen; it locks, as on the
-C128, which reads it at start-up to choose the screen BASIC uses. `ESC` `X` (F9, then X)
-moves BASIC to the other screen.
+**80 columns.** The C128 has two screens, and BASIC writes to one of them. **40/80
+DISPLAY** (F11 or Print Screen) selects the screen that is shown; it locks, as on the C128.
+It does not move BASIC: pressed on its own after the C128 has started, it shows an empty
+80-column screen.
+
+To start in 80 columns, press F11, open the settings menu (F12) and choose **Reset game**.
+The C128 reads the key during the first second after a start and comes up with BASIC on the
+80-column screen.
+
+To change screens without a reset, press F11 and then `ESC` `X` (F9, then X). BASIC
+continues on the other screen, which shows no `READY.` until the next command. `GRAPHIC 5`
+(80 columns) and `GRAPHIC 0` (40 columns) move BASIC as `ESC` `X` does. When BASIC is moved
+without F11, the picture stays on the other screen and no longer changes; press F11.
 
 **2 MHz.** BASIC 7.0's `FAST` switches the 40-column screen off, as on a real C128, and
 `SLOW` switches it back on. The 80-column screen keeps working at 2 MHz.
@@ -271,8 +280,10 @@ moves BASIC to the other screen.
 **C64 mode.** `GO64` switches to C64 mode, with the C64's BASIC and KERNAL.
 
 **CP/M.** With the C128 CP/M system disk in drive 8, the C128 starts CP/M 3.0 on its Z80.
-CP/M chooses its screen when it starts: for 80 columns, press F11 (40/80 DISPLAY) before
-or while CP/M loads.
+CP/M chooses its screen while it loads: for 80 columns, press F11 (40/80 DISPLAY) within
+about 15 seconds of the start. Later, press F11 and choose **Reset game** in the settings
+menu; CP/M then starts again in 80 columns. The arrow keys under CP/M are described under
+[Keyboard](#keyboard).
 
 **Disks.** Drive 8 is a 1571. It reads `.d64`, `.g64` and double-sided `.d71` images, and
 **Create blank disk** creates a `.d71`. Fast disk load applies to the C64 only; the 1571
@@ -315,8 +326,10 @@ by position. Tab is CTRL, Left Ctrl and Left Alt the Commodore key, Insert `£`,
 | Caps Lock | SHIFT LOCK |
 | F1, F3, F5, F7 | F1, F3, F5, F7 |
 | F2, F4, F6, F8 | SHIFT + F1, F3, F5, F7 |
-| Cursor keys | CRSR keys (left and up with SHIFT) |
-| Numeric keypad | Joystick: 8 4 6 2 and the diagonals, 0 or 5 fire (Right Ctrl fires too) |
+| Cursor keys | CRSR keys (left and up with SHIFT); under CP/M see below |
+| Numeric keypad digits | Joystick: 8 4 6 2 and the diagonals, 0 or 5 fire (Right Ctrl fires too); with Num Lock, digits |
+| Numeric keypad `/ * - + .` and Enter | Those characters and RETURN |
+| Num Lock | Switches the keypad's digits between joystick (the default) and digits |
 | F12 | Settings menu |
 
 **Commodore 128 keys:**
@@ -331,8 +344,19 @@ by position. Tab is CTRL, Left Ctrl and Left Alt the Commodore key, Insert `£`,
 | Scroll Lock | NO SCROLL |
 | Caps Lock | CAPS LOCK in C128 mode, SHIFT LOCK in C64 mode |
 
-The C128's separate cursor keys and numeric keypad are not mapped: the cursor keys work as
-on the C64, and the numeric keypad remains a joystick.
+**Cursor keys under CP/M.** The C128 has two sets of cursor keys, which CP/M treats
+differently: programs such as *SuperCalc* move with the separate keys above the main
+keyboard, and the CRSR keys of the main keyboard edit the command line. Under CP/M the
+arrow keys are the separate cursor keys, and Shift with an arrow key is the CRSR key, for
+editing the command line (Ctrl-A and Ctrl-F also move along it). A key held down under CP/M
+does not repeat. In C128 BASIC and C64 mode the arrow keys are the CRSR keys.
+
+**Numeric keypad.** Its digits are a joystick until Num Lock is pressed; Num Lock switches
+them to typing digits and back. The choice holds until it is pressed again or the board is
+restarted; on the 40-column screen a short note shows it. In C128 BASIC and under CP/M the
+keypad is the C128's own numeric keypad (with `/` and `*` from the main keyboard); on the
+C64 and in C64 mode it types the main keyboard's digits and characters. The keyboard's Num
+Lock light does not show the setting.
 
 ## Controllers
 

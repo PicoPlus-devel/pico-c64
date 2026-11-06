@@ -91,6 +91,17 @@ extern "C"
 #define SERIAL_KEYBOARD_AVAILABLE 0
 #endif
 
+// Developer output on the console: the time per frame, memory use, what is loaded. Only with
+// C64_DEBUG_LOG (CMakeLists.txt: not in Release builds); errors and what the serial keyboard
+// prints are always shown.
+#if C64_DEBUG_LOG
+#define debug_printf(...)   printf(__VA_ARGS__)
+#define debug_heap(tag)     Frens::dumpHeapStats(tag)
+#else
+#define debug_printf(...)   do { if (0) printf(__VA_ARGS__); } while (0)
+#define debug_heap(tag)     do { } while (0)
+#endif
+
 // PicoDVI's audio ring takes a whole frame (882 samples) with room to spare
 #define AUDIOBUFFERSIZE 2048
 
@@ -333,7 +344,7 @@ static uint8_t *load_rom(const char *const *names, size_t size, Where where = Wh
     f_close(&fil);
     if (buf)
     {
-        printf("ROM %s%s\n", path, is_psram(buf) ? " (PSRAM)" : "");
+        debug_printf("ROM %s%s\n", path, is_psram(buf) ? " (PSRAM)" : "");
     }
     return buf;
 }
@@ -447,12 +458,12 @@ static void rom_store_update(void)
     if (current)
     {
         free(buf);
-        printf("ROMs in flash at 0x%08x\n", (unsigned)(uintptr_t)store);
+        debug_printf("ROMs in flash at 0x%08x\n", (unsigned)(uintptr_t)store);
         return;
     }
     // Rewrite it all: erase, the ROMs the card has, then the header that says so
     uint32_t ofs = (uint32_t)((uintptr_t)store - XIP_BASE);
-    printf("Copying the ROMs to flash at 0x%08x\n", (unsigned)(uintptr_t)store);
+    debug_printf("Copying the ROMs to flash at 0x%08x\n", (unsigned)(uintptr_t)store);
     Frens::flashEraseSafe(ofs, C64_ROM_STORE_BYTES);
     RomStoreHeader header;
     memset(&header, 0xFF, sizeof(header));
@@ -480,7 +491,7 @@ static void rom_store_update(void)
         if (ok)
         {
             header.present |= 1u << slot;
-            printf("  %s\n", path);
+            debug_printf("  %s\n", path);
         }
     }
     Frens::flashProgramSafe(ofs + C64_ROM_STORE_BYTES - FLASH_SECTOR_SIZE, (const uint8_t *)&header, sizeof(header));
@@ -509,7 +520,7 @@ static bool load_machine(char *err, size_t errSize)
         mem.chargen = (uint8_t *)rom_in_store(SLOT_CHARGEN);
         if (mem.kernal && mem.basic && mem.chargen)
         {
-            printf("ROMs in flash\n");
+            debug_printf("ROMs in flash\n");
         }
         mem.kernal = mem.kernal ? mem.kernal : load_rom(kernal_names, 8192);
         mem.basic = mem.basic ? mem.basic : load_rom(basic_names, 8192);
@@ -532,7 +543,7 @@ static bool load_machine(char *err, size_t errSize)
     {
         printf("%s ROM: no disk drive\n", romNoRoom ? "No room for the drive's" : c128 ? "No 1571" : "No 1541");
     }
-    printf("RAM in %s, %u bytes of SRAM left\n", is_psram(mem.ram) ? "PSRAM" : "SRAM", (unsigned)sram_free());
+    debug_printf("RAM in %s, %u bytes of SRAM left\n", is_psram(mem.ram) ? "PSRAM" : "SRAM", (unsigned)sram_free());
     return true;
 }
 
@@ -947,12 +958,21 @@ static void __not_in_flash_func(process_audio_frame)(void)
 //
 // Both: Esc RUN/STOP, PgUp RESTORE, Home CLR/HOME, Backspace DEL, Caps Lock SHIFT LOCK,
 // F2/F4/F6/F8 shifted F1/F3/F5/F7, cursor left and up shifted right and down, F12 the
-// settings menu, the numeric keypad a joystick (8 4 6 2 and diagonals, 0 or 5 fire).
+// settings menu.
+//
+// The numeric keypad: its digits are a joystick (8 4 6 2 and diagonals, 0 or 5 fire) until
+// Num Lock is pressed, which makes them type digits and back again; / * - + . and Enter
+// always type. Typing, it is the C128's own keypad in C128 mode (BASIC 7, CP/M), with / and
+// * from the main keyboard, and the C64's keys otherwise.
 //
 // The C128's own keys (as esp32cbm maps them): F9 ESC, F10 HELP, Right Alt ALT, End LINE
 // FEED (US layout), Scroll Lock NO SCROLL, F11 or Print Screen 40/80 DISPLAY (it locks,
-// and picks the screen shown), Caps Lock CAPS LOCK in C128 mode. Its separate cursor
-// keys and keypad are not mapped: the C64's cursor keys work in both modes.
+// and picks the screen shown), Caps Lock CAPS LOCK in C128 mode.
+//
+// CP/M on the C128: the arrows are the C128's separate cursor keys above the main
+// keyboard. CP/M programs move with them (SuperCalc, WordStar: CP/M makes Ctrl-E, X, S
+// and D of them); the C64's cursor keys, which do nothing there, edit the command line
+// and are Shift+arrows. Everywhere else the arrows are the C64's cursor keys.
 //
 // Gamepads are joysticks: the first in port 2 (where most games read it), the second in
 // port 1; Select+A swaps them. A fires, B is SPACE, X RETURN, Y F1, and Start pressed on
@@ -972,6 +992,22 @@ enum
     K_1 = 56, K_LEFT_ARROW = 57, K_CTRL = 58, K_2 = 59, K_SPACE = 60, K_CBM = 61, K_Q = 62, K_RUN_STOP = 63,
     // The C128's rows K0-K2
     K_HELP = 64, K_ESC = 72, K_LINE_FEED = 75, K_ALT = 80, K_NO_SCROLL = 87,
+    K_TOP_UP = 83, K_TOP_DOWN = 84, K_TOP_LEFT = 85, K_TOP_RIGHT = 86,  // its own cursor keys
+    // ... and its numeric keypad
+    K_KP_8 = 65, K_KP_5 = 66, K_KP_2 = 68, K_KP_4 = 69, K_KP_7 = 70, K_KP_1 = 71,
+    K_KP_PLUS = 73, K_KP_MINUS = 74, K_KP_ENTER = 76, K_KP_6 = 77, K_KP_9 = 78, K_KP_3 = 79,
+    K_KP_0 = 81, K_KP_PERIOD = 82,
+};
+
+// The PC's numeric keypad, HID_KEY_KEYPAD_DIVIDE to HID_KEY_KEYPAD_DECIMAL (/ * - + Enter
+// 1-9 0 .), when it types: on a C128 in its own mode, and otherwise
+static const uint8_t keypadC128[16] = {
+    K_SLASH, K_ASTERISK, K_KP_MINUS, K_KP_PLUS, K_KP_ENTER, K_KP_1, K_KP_2, K_KP_3,
+    K_KP_4, K_KP_5, K_KP_6, K_KP_7, K_KP_8, K_KP_9, K_KP_0, K_KP_PERIOD,
+};
+static const uint8_t keypadC64[16] = {
+    K_SLASH, K_ASTERISK, K_MINUS, K_PLUS, K_RETURN, K_1, K_2, K_3,
+    K_4, K_5, K_6, K_7, K_8, K_9, K_0, K_PERIOD,
 };
 
 // For each USB HID usage, unshifted and with Shift held: the C64 key, and what the C64's
@@ -1080,6 +1116,11 @@ static void build_keymap(bool symbolic)
 static int joystick_port = 2;           // the first gamepad's port (1 or 2)
 static bool shift_lock = false;
 static bool c128Mode = false;           // a C128 in its own mode, not C64 mode (after each frame)
+// CP/M runs: the Z80 had the bus at the end of a frame since the start or reset. It is
+// there at nearly every frame's end under CP/M and never in C128 BASIC; it stays set so
+// the moments the 8502 takes the bus for the disk drive do not change what the arrows are.
+static bool cpmRunning = false;
+static bool keypadTypes = false;        // Num Lock: the keypad's digits type, not a joystick
 static uint8_t keys_down[(CBM_KEYS + 7) / 8];   // as last sent to the core
 static uint8_t prevButtons[2];
 static bool startAlone = false;         // Start went down with nothing else
@@ -1132,18 +1173,33 @@ static void update_input(void)
             case HID_KEY_PAGE_UP:
                 set_bit(want, CBM_KEY_RESTORE);
                 continue;
-            case HID_KEY_KEYPAD_8: kbJoy |= CBM_JOY_UP; continue;
-            case HID_KEY_KEYPAD_2: kbJoy |= CBM_JOY_DOWN; continue;
-            case HID_KEY_KEYPAD_4: kbJoy |= CBM_JOY_LEFT; continue;
-            case HID_KEY_KEYPAD_6: kbJoy |= CBM_JOY_RIGHT; continue;
-            case HID_KEY_KEYPAD_7: kbJoy |= CBM_JOY_UP | CBM_JOY_LEFT; continue;
-            case HID_KEY_KEYPAD_9: kbJoy |= CBM_JOY_UP | CBM_JOY_RIGHT; continue;
-            case HID_KEY_KEYPAD_1: kbJoy |= CBM_JOY_DOWN | CBM_JOY_LEFT; continue;
-            case HID_KEY_KEYPAD_3: kbJoy |= CBM_JOY_DOWN | CBM_JOY_RIGHT; continue;
-            case HID_KEY_KEYPAD_0:
-            case HID_KEY_KEYPAD_5: kbJoy |= CBM_JOY_FIRE; continue;
+            case HID_KEY_NUM_LOCK:
+                if (!wasDown)
+                {
+                    keypadTypes = !keypadTypes;
+                    osd_show(keypadTypes ? "KEYPAD: NUMBERS" : "KEYPAD: JOYSTICK");
+                }
+                continue;
             default:
                 break;
+            }
+            // The numeric keypad (see Input above)
+            if (hid >= HID_KEY_KEYPAD_DIVIDE && hid <= HID_KEY_KEYPAD_DECIMAL)
+            {
+                static const uint8_t joyDigits[10] = {      // 1-9, 0
+                    CBM_JOY_DOWN | CBM_JOY_LEFT, CBM_JOY_DOWN, CBM_JOY_DOWN | CBM_JOY_RIGHT,
+                    CBM_JOY_LEFT, CBM_JOY_FIRE, CBM_JOY_RIGHT,
+                    CBM_JOY_UP | CBM_JOY_LEFT, CBM_JOY_UP, CBM_JOY_UP | CBM_JOY_RIGHT, CBM_JOY_FIRE,
+                };
+                if (!keypadTypes && hid >= HID_KEY_KEYPAD_1 && hid <= HID_KEY_KEYPAD_0)
+                {
+                    kbJoy |= joyDigits[hid - HID_KEY_KEYPAD_1];
+                    continue;
+                }
+                int k = (c128Mode ? keypadC128 : keypadC64)[hid - HID_KEY_KEYPAD_DIVIDE];
+                set_bit(want, k);
+                if (k < 64 && shiftForce == S_AS_PC) shiftForce = S_OFF;   // what is printed on it
+                continue;
             }
             if (model == CBM_MODEL_C128)
             {
@@ -1155,6 +1211,25 @@ static void update_input(void)
                 {
                     set_bit(want, k);
                     continue;
+                }
+                // CP/M: the arrows the C128's own cursor keys, Shift+arrows the C64's
+                // (see Input above)
+                if (cpmRunning && hid >= HID_KEY_ARROW_RIGHT && hid <= HID_KEY_ARROW_UP)
+                {
+                    if (!pcShift)
+                    {
+                        static const uint8_t top[4] = { K_TOP_RIGHT, K_TOP_LEFT, K_TOP_DOWN, K_TOP_UP };
+                        set_bit(want, top[hid - HID_KEY_ARROW_RIGHT]);
+                        continue;
+                    }
+                    // Right and down are the unshifted CRSR keys, with the PC's Shift held;
+                    // left and up (SHIFT held) come from the keymap below
+                    if (hid == HID_KEY_ARROW_RIGHT || hid == HID_KEY_ARROW_DOWN)
+                    {
+                        set_bit(want, hid == HID_KEY_ARROW_RIGHT ? K_CRSR_RIGHT : K_CRSR_DOWN);
+                        if (shiftForce == S_AS_PC) shiftForce = S_OFF;
+                        continue;
+                    }
                 }
             }
             const KeyMap &m = keymap[pcShift][hid];
@@ -1412,7 +1487,7 @@ static void serial_keyboard_init(void)
     irq_set_exclusive_handler(irqNum, serialUartIrq);
     irq_set_enabled(irqNum, true);
     uart_set_irqs_enabled(uart_default, true, false);
-    printf("Serial keyboard: UART RX on GPIO %d\n", PICO_DEFAULT_UART_RX_PIN);
+    debug_printf("Serial keyboard: UART RX on GPIO %d\n", PICO_DEFAULT_UART_RX_PIN);
 }
 
 // Drop what is queued; what the sender still has in flight is thrown away too
@@ -2044,7 +2119,7 @@ static void ensure_marker(const char *name, const char *note)
         UINT bw;
         f_write(&fil, note, strlen(note), &bw);
         f_close(&fil);
-        printf("Created %s\n", path);
+        debug_printf("Created %s\n", path);
     }
 }
 
@@ -2165,7 +2240,7 @@ static bool insert_media(const char *path, char *err, size_t errSize)
             snprintf(err, errSize, "Cannot use cartridge");
             return false;
         }
-        printf("Cartridge: %s\n", cbm_cart_info());
+        debug_printf("Cartridge: %s\n", cbm_cart_info());
         break;
     }
     case Media::Disk:
@@ -2292,7 +2367,8 @@ static void processPerFrame(void)
     update_input();
 }
 
-// Time spent per frame, printed every 5 seconds: how much of the 20 ms the C64 takes
+// Time spent per frame, printed every 5 seconds with C64_DEBUG_LOG: how much of the 20 ms
+// the C64 takes
 static struct
 {
     uint32_t frames, emu, emuMax, audio, audioMax;
@@ -2305,12 +2381,14 @@ static void report_stats(void)
     {
         return;
     }
+#if C64_DEBUG_LOG
     cbm_status_t s;
     cbm_get_status(&s);
     printf("per frame: emulation %lu us (max %lu), audio %lu us (max %lu), queued audio %d-%d, drive %s, PC $%04X\n",
            (unsigned long)(stats.emu / stats.frames), (unsigned long)stats.emuMax,
            (unsigned long)(stats.audio / stats.frames), (unsigned long)stats.audioMax,
            stats.levelMin, stats.levelMax, s.drive_motor[0] ? "busy" : "idle", s.pc);
+#endif
     memset(&stats, 0, sizeof(stats));
     stats.levelMin = INT32_MAX;
 }
@@ -2455,7 +2533,7 @@ int main()
     // malloc would otherwise sbrk a whole big block even when most of it is free at the
     // top of the heap, and fail - or panic - with the memory sram_free() counts
     Frens::claimHeap();
-    Frens::dumpHeapStats("claimHeap");
+    debug_heap("claimHeap");
     serial_keyboard_init();
 
     init_settings_visibility();
@@ -2493,7 +2571,7 @@ int main()
         if (strlen(selectedRom) == 0)
         {
             menu("pico-c64", ErrorMessage, isFatalError, showSplash, menuExtensions, selectedRom);
-            printf("Selected: %s\n", selectedRom);
+            debug_printf("Selected: %s\n", selectedRom);
         }
         *ErrorMessage = 0;
         EXT_AUDIO_SETVOLUME(settings.fruitjamVolumeLevel);
@@ -2536,13 +2614,14 @@ int main()
             selectedRom[0] = 0;
             continue;
         }
-        printf("%s running\n", machineName);
-        Frens::dumpHeapStats("machine running");
+        debug_printf("%s running\n", machineName);
+        debug_heap("machine running");
         cbm_screen_invalidate();
         release_input();
         serial_keyboard_cancel();       // a new game: nothing left over from before
         joystick_port = c64opt.joystickPort;    // Select+A swaps it for this game only
         c128Mode = false;
+        cpmRunning = false;
         media_set_folder(selectedRom);
         menuSetDiskHooks(mem.drive ? &diskHooks : nullptr);
         menuSetCassetteHooks(&cassetteHooks);
@@ -2570,6 +2649,7 @@ int main()
             cbm_status_t st;
             cbm_get_status(&st);
             c128Mode = st.c128_mode;
+            cpmRunning = cpmRunning || st.z80;
             vdc_update(st.vdc);
             uint32_t t2 = Frens::time_us();
             stats.emu += t1 - t0;
@@ -2611,6 +2691,7 @@ int main()
                     // As switching the C64 off and on: disk, cartridge and tape stay in. A tape
                     // the game was started from goes back to its start, for the LOAD typed again
                     cbm_reset();
+                    cpmRunning = false;
                     if (media == Media::Tape && cbm_tape_path())
                     {
                         cbm_tape_rewind();
@@ -2626,7 +2707,7 @@ int main()
 
         audio_park();
         free_machine();
-        Frens::dumpHeapStats("after free_machine");
+        debug_heap("after free_machine");
         selectedRom[0] = 0;
         showSplash = false;
     }

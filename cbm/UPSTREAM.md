@@ -146,6 +146,10 @@ so the core can be updated from upstream again.
     clipped samples a second before, none after), followed by the output stage's 16 kHz
     low pass. Compile-time log `CBM_SID_LOG` (the register writes, as replayed).
 
+19. `core/cbm_internal.h`, `core/drive.c`, `core/gcr.c`: `CBM_ERROR` next to `CBM_LOG`,
+    for a disk image that cannot be written. The Pico port (`port/cbm_port.h`) prints
+    `CBM_LOG` only with `C64_DEBUG_LOG` (not in Release builds); `CBM_ERROR` always.
+
 ## Known problems
 
 - Frankie Goes to Hollywood (Ocean, G64 of the original): its copy
