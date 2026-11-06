@@ -26,10 +26,19 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
 
 # v0.2
 
-- The arrow keys now work in CP/M programs such as SuperCalc. Shift with an arrow key edits
-  the CP/M command line.
-- The readme explains how to use the C128's 80-column screen.
-- Less output on the serial console.
+## What's new
+
+- **The numeric keypad can type numbers.** Num Lock switches its digits between joystick
+  (the default) and digits. Its `/ * - + .` and Enter keys always type. In C128 BASIC and
+  CP/M it works as the C128's own numeric keypad.
+
+## Fixes
+
+- **The arrow keys work in CP/M programs such as SuperCalc.** Shift with an arrow key moves
+  along the CP/M command line.
+- **The readme explains how to switch the C128 to its 80-column screen**, for BASIC and CP/M.
+- **Less output on the serial console.** Timing and memory messages are no longer printed
+  during play.
 
 # v0.1
 
