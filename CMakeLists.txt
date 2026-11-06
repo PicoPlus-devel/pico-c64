@@ -232,6 +232,25 @@ if(C64_AUTOSTART_C128)
     target_compile_definitions(${projectname} PRIVATE C64_AUTOSTART_C128=1)
 endif()
 
+# Developer output on the console: the time per frame every 5 seconds, memory use, what is
+# loaded, the core's notes. Off in Release builds (bld.sh's default, and so the releases),
+# on otherwise (bld.sh -d); -DC64_DEBUG_LOG=ON|OFF decides either way. Errors are always
+# printed.
+if(NOT DEFINED C64_DEBUG_LOG OR C64_DEBUG_LOG STREQUAL "")
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(C64_DEBUG_LOG OFF)
+    else()
+        set(C64_DEBUG_LOG ON)
+    endif()
+endif()
+if(C64_DEBUG_LOG)
+    set(C64_DEBUG_LOG_VALUE 1)
+else()
+    set(C64_DEBUG_LOG_VALUE 0)
+endif()
+message(STATUS "Debug output on the console: ${C64_DEBUG_LOG_VALUE}")
+target_compile_definitions(${projectname} PRIVATE C64_DEBUG_LOG=${C64_DEBUG_LOG_VALUE})
+
 if(NOT PICO_PLATFORM STREQUAL "rp2040")
     message(STATUS "Using PICO_PIO_USE_GPIO_BASE=1 for non-rp2040 platforms.")
     target_compile_definitions(${projectname} PRIVATE

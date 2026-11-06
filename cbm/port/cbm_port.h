@@ -24,7 +24,15 @@ void cbm_port_free(void *p);
 }
 #endif
 
+/* The core's notes only with C64_DEBUG_LOG (CMakeLists.txt: not in Release builds);
+ * errors always
+ */
+#if C64_DEBUG_LOG
 #define CBM_LOG(fmt, ...)   printf("cbm: " fmt "\n", ##__VA_ARGS__)
+#else
+#define CBM_LOG(fmt, ...)   do { if (0) printf(fmt, ##__VA_ARGS__); } while (0)
+#endif
+#define CBM_ERROR(fmt, ...) printf("cbm: " fmt "\n", ##__VA_ARGS__)
 #define cbm_malloc(n)       cbm_port_malloc(n)
 #define cbm_calloc(n, s)    cbm_port_calloc((n), (s))
 #define cbm_free(p)         cbm_port_free(p)

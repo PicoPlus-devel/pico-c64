@@ -14,6 +14,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #define CBM_LOG(fmt, ...)   ESP_LOGI("cbm", fmt, ##__VA_ARGS__)
+#define CBM_ERROR(fmt, ...) ESP_LOGE("cbm", fmt, ##__VA_ARGS__)
 /* The core's buffers in PSRAM: plain malloc() serves small blocks from
  * internal RAM, which WiFi, Bluetooth and the LCD need
  */
@@ -24,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #define CBM_LOG(fmt, ...)   printf("cbm: " fmt "\n", ##__VA_ARGS__)
+#define CBM_ERROR(fmt, ...) printf("cbm: " fmt "\n", ##__VA_ARGS__)
 #define cbm_malloc(n)       malloc(n)
 #define cbm_calloc(n, s)    calloc((n), (s))
 #define cbm_free(p)         free(p)

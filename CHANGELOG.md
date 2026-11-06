@@ -24,6 +24,13 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
 > [!IMPORTANT]
 > RP2350 only. The original Raspberry Pi Pico (RP2040) is not fast enough for the C64.
 
+# v0.2
+
+- The arrow keys now work in CP/M programs such as SuperCalc. Shift with an arrow key edits
+  the CP/M command line.
+- The readme explains how to use the C128's 80-column screen.
+- Less output on the serial console.
+
 # v0.1
 
 First release.

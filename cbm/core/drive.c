@@ -832,7 +832,7 @@ void cbm_disk_eject(int drive)
     }
     drive_t *d = &s_drive[drive];
     if (!gcr_flush(d->disk, &d->writes)) {
-        CBM_LOG("can't write %s", d->disk->path);
+        CBM_ERROR("can't write %s", d->disk->path);
     }
     gcr_free(d->disk);
     d->inserted = false;
@@ -865,7 +865,7 @@ void cbm_disk_flush(void)
         drive_t *d = &s_drive[i];
         bool written = d->inserted && gcr_dirty(d->disk);
         if (d->inserted && !gcr_flush(d->disk, &d->writes)) {
-            CBM_LOG("can't write %s", d->disk->path);
+            CBM_ERROR("can't write %s", d->disk->path);
         }
         if (written) {
             space_update(i, d->disk);
