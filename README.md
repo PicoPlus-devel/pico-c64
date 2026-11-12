@@ -125,6 +125,8 @@ the [releases page](https://github.com/PicoPlus-devel/pico-c64/releases/latest).
 | [Adafruit Feather RP2350](https://www.adafruit.com/product/6000) with a TLV320DAC3100 DAC and a microSD breakout — *untested* | HSTX | Optional | With PSRAM | `./bld.sh -c 14` | `picoC64_AdafruitFeatherRP2350_TLV320DAC3100_arm_piousb.uf2` |
 | [Murmulator M2](https://murmulator.ru/) — *untested* | HSTX | Yes | Yes | `./bld.sh -c 13` | `picoC64_MurmulatorM2_arm.uf2` |
 | [Olimex RP2040-PICO-PC](https://github.com/PicoPlus-devel/pico-infonesPlus#olimex-rp2040-pico-pc) with a Pico 2 — *untested* | HSTX | Optional | With PSRAM | `./bld.sh -c 15` | `picoC64_OlimexPicoPC_arm.uf2` |
+| [Pico Computer 3](https://github.com/PicoPlus-devel/pico-infonesPlus#pico-computer-3) — *untested* | HSTX | 8 MB | Yes | `./bld.sh -c 17` | `picoC64_PicoComputer3_arm.uf2` |
+| [PCB for the Waveshare RP2350-PiZero](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-waveshare-rp2350-pizero) | HSTX | Optional | With PSRAM | `./bld.sh -c 18` | `picoC64_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2` |
 | [Pimoroni Pico DV Demo Base](https://github.com/PicoPlus-devel/pico-infonesPlus#raspberry-pi-pico-or-pico-2-setup-for-pimoroni-pico-dv-demo-base) with a Pico 2 or Pico Plus 2 — *untested* | PicoDVI | Pico Plus 2: 8 MB | No | `./bld.sh -c 1 -2` | `picoC64_PimoroniDVI_pico2_arm.uf2` |
 | [Waveshare RP2350-Zero on the PicoNES Mini PCB](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-waveshare-rp2040rp2350-zero) — *untested* | PicoDVI | None | No | `./bld.sh -c 6 -2` | `picoC64_WaveShareRP2350ZeroWithPCB_arm.uf2` |
 | [Waveshare RP2350-PiZero](https://github.com/PicoPlus-devel/pico-infonesPlus#waveshare-rp2040rp2350-pizero-development-board) — *untested* | PicoDVI | Optional | No | `./bld.sh -c 7` | `picoC64_WaveShareRP2350PiZero_arm_piousb.uf2` |
@@ -176,6 +178,8 @@ the setup sections in the
 > The PicoNES v2.6 and v2.8 are shown with a Pimoroni Pico Plus 2. A Raspberry Pi Pico 2 or
 > Pico 2 W can also be fitted. With a Pimoroni Pico Plus 2, which has PSRAM, the PicoNES
 > also runs the Commodore 128.
+
+A fifth design, the [PCB for the Waveshare RP2350-PiZero](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-waveshare-rp2350-pizero) by Liu Szuping, is supported by the emulator, but the design is not yet available.
 
 > [!NOTE]
 > Sellers on AliExpress have copied the PicoNES design and sell ready-made boards. For
@@ -435,6 +439,7 @@ Besides the settings every emulator of the family has, the settings menu offers:
 | Keyboard layout | US (default) or C64 |
 | Machine | C64 (default) or C128: the computer `.d64` and `.g64` disks start on. Only on boards that can run the C128. |
 | Serial keyboard | Off (default) or On: see [Serial keyboard](#serial-keyboard). A setting shared with the other emulators. |
+| Disable PSRAM | No (default) or Yes: a testing aid. Saving Yes restarts the board, which then runs as a board without PSRAM, so the C128 is not offered. Only on boards with PSRAM. |
 
 They are kept in `/settings_C64x.dat` on the SD card. During a game the settings menu also
 has the **Drive 8** and **Cassette** rows, see [Disks](#disks) and [Tape](#tape).
@@ -531,6 +536,10 @@ made for this port is listed in [cbm/UPSTREAM.md](cbm/UPSTREAM.md).
   by **Gavin Knight** ([DynaMight1124](https://github.com/DynaMight1124)).
 - Support for the **Olimex RP2040-PICO-PC** was contributed by
   [DnCraptor](https://github.com/DnCraptor).
+- Support for the **Pico Computer 3** was contributed by
+  [javavi](https://github.com/javavi).
+- The **PCB for the Waveshare RP2350-PiZero** was designed by Liu Szuping
+  ([szuping](https://github.com/szuping)).
 
 ### AI assistance
 

@@ -19,15 +19,30 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
    hold **BOOTSEL** while connecting the board over USB, and copy the file to the drive that
    appears.
 
-[Full setup instructions are in the readme](https://github.com/PicoPlus-devel/pico-c64#setup-overview).
+[Full setup instructions are in the readme](https://github.com/PicoPlus-devel/pico-c64#getting-started).
 
 > [!IMPORTANT]
 > RP2350 only. The original Raspberry Pi Pico (RP2040) is not fast enough for the C64.
 
-# v0.2.1
+# v0.3
 
 ## What's new
 
+- **Pico Computer 3.** The emulator now runs on the
+  [Pico Computer 3](https://github.com/UKTailwind/Pico-Computer-3): HDMI, sound
+  through HDMI or the audio jack, a USB keyboard and USB controllers on the USB-A ports, 8 MB of
+  PSRAM, so the Commodore 128 runs as well, and NES or SNES controllers and a Wii Classic
+  controller on the I/O header. The pin assignment may still change. See
+  [Supported boards](https://github.com/PicoPlus-devel/pico-c64#supported-boards). Thanks to @javavi.
+- **PCB for the Waveshare RP2350-PiZero.** The emulator now runs on a PCB for the Waveshare
+  RP2350-PiZero, designed by @szuping: HDMI, sound through HDMI or the audio jack, a USB
+  keyboard or a USB controller on the PIO-USB port, NES and SNES controller ports, and a socket
+  for an ESP32 module that connects Bluetooth controllers through
+  [BlueRetro](https://github.com/darthcloud/blueretro). With PSRAM soldered onto the
+  RP2350-PiZero, the Commodore 128 runs as well. The PCB design is not yet available. See
+  [Supported boards](https://github.com/PicoPlus-devel/pico-c64#supported-boards).
+- **New setting *Disable PSRAM*.** For testing on a board with PSRAM how the emulator runs
+  without it; the Commodore 128 is then not offered. Saving a change restarts the board.
 - **NES and SNES controllers on the controller ports are now read with the same timing as a
   real console**, on all boards. Thanks to @javavi.
 - Under pico-bootLoader, the settings menu entry that goes back to the bootloader is now called
@@ -159,3 +174,23 @@ For more info about the Murmulator see https://murmulator.ru/.
 | Pico 2 | [picoC64_OlimexPicoPC_arm.uf2](https://github.com/PicoPlus-devel/pico-c64/releases/latest/download/picoC64_OlimexPicoPC_arm.uf2) |
 
 There is no Pico 2 W binary for this board.
+
+### Pico Computer 3
+
+For more info about the Pico Computer 3 see https://github.com/UKTailwind/Pico-Computer-3
+
+| Board | Binary |
+|:--|:--|
+| Pico Computer 3 (PC3) | [picoC64_PicoComputer3_arm.uf2](https://github.com/PicoPlus-devel/pico-c64/releases/latest/download/picoC64_PicoComputer3_arm.uf2) |
+
+### PCB Waveshare RP2350-PiZero
+
+For more info about this PCB, designed by Liu Szuping, see [PCB with Waveshare RP2350-PiZero](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-waveshare-rp2350-pizero). The PCB design is not yet available.
+
+| Board | Binary |
+|:--|:--|
+| Waveshare RP2350-PiZero (*) | [picoC64_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2](https://github.com/PicoPlus-devel/pico-c64/releases/latest/download/picoC64_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2) |
+
+This binary is only for the RP2350-PiZero on this PCB.
+
+(*) If you fitted this board with PSRAM and it has a non-Winbond flash chip, apply the [flash_config fix](https://github.com/PicoPlus-devel/pico-infonesPlus#psram-with-a-non-winbond-flash-chip) before flashing the emulator.

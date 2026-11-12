@@ -143,6 +143,7 @@ static void init_settings_visibility(void)
     v[MOPT_ENTER_BOOTSEL_MODE] = 1;
     v[MOPT_CONTROLLER_TEST] = 1;
     v[MOPT_SERIAL_KEYBOARD] = SERIAL_KEYBOARD_AVAILABLE;   // hidden where the board has no UART RX
+    v[MOPT_DISABLE_PSRAM] = 1;
     g_settings_visibility = g_settings_visibility_c64;
 }
 
