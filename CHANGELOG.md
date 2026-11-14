@@ -41,6 +41,9 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
   [BlueRetro](https://github.com/darthcloud/blueretro). With PSRAM soldered onto the
   RP2350-PiZero, the Commodore 128 runs as well. The PCB design is not yet available. See
   [Supported boards](https://github.com/PicoPlus-devel/pico-c64#supported-boards).
+  **Known issue:** on this board, some TVs and monitors lose the picture for a few seconds at
+  a time during play; others show it without interruption. This is a limitation of the
+  RP2350-PiZero at 384 MHz, the clock this emulator needs.
 - **New setting *Disable PSRAM*.** For testing on a board with PSRAM how the emulator runs
   without it; the Commodore 128 is then not offered. Saving a change restarts the board.
 - **NES and SNES controllers on the controller ports are now read with the same timing as a

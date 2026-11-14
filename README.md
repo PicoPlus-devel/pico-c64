@@ -179,7 +179,7 @@ the setup sections in the
 > Pico 2 W can also be fitted. With a Pimoroni Pico Plus 2, which has PSRAM, the PicoNES
 > also runs the Commodore 128.
 
-A fifth design, the [PCB for the Waveshare RP2350-PiZero](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-waveshare-rp2350-pizero) by Liu Szuping, is supported by the emulator, but the design is not yet available.
+A fifth design, the [PCB for the Waveshare RP2350-PiZero](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-waveshare-rp2350-pizero) by Liu Szuping, is supported by the emulator, but the design is not yet available. During play, some TVs and monitors lose the picture for a few seconds at a time, while others show it without interruption. This is a limitation of the RP2350-PiZero at 384 MHz, the clock this emulator requires; programs that run at 252 MHz are not affected.
 
 | <img src="assets/WaveShareRP2350PiZeroLiuPCB_top.jpg" width="380" alt="The PCB seen from above, with the RP2350-PiZero, the ESP32 module, two NES and two SNES controller ports"> | <img src="assets/WaveShareRP2350PiZeroLiuPCB_inuse.jpg" width="380" alt="The PCB in use, with a DualShock 4 controller"> |
 |:--:|:--:|
