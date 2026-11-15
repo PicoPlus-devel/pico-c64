@@ -50,6 +50,11 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
   real console**, on all boards. Thanks to @javavi.
 - Under pico-bootLoader, the settings menu entry that goes back to the bootloader is now called
   **Return to boot loader**.
+- **Pico Computer 3** (updated 15 November 2026): the NES and SNES controllers on the I/O
+  header moved to other pins. See
+  [Pico Computer 3](https://github.com/PicoPlus-devel/pico-infonesPlus#pico-computer-3) in the
+  pico-infonesPlus readme for the new pins, and download `picoC64_PicoComputer3_arm.uf2`
+  again.
 
 ## Fixes
 
