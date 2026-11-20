@@ -24,7 +24,9 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
 > [!IMPORTANT]
 > RP2350 only. The original Raspberry Pi Pico (RP2040) is not fast enough for the C64.
 
-# Next release
+# v0.3_bl
+
+This version is built for [pico-bootLoader](https://github.com/PicoPlus-devel/pico-bootLoader) only, and is included in its SD-card archive. It has no release of its own: without pico-bootLoader, keep using v0.3.
 
 ## What's new
 
