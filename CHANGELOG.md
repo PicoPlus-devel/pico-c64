@@ -26,9 +26,14 @@ audio go out over HDMI or DVI, and a USB keyboard works as the C64 keyboard.
 
 # Next release
 
+## What's new
+
+- **Attract mode.** pico-bootLoader's new attract mode can now start the emulator with a random program from `/roms/C64`. Press any button to play that program yourself.
+
 ## Changes
 
 - Built with Pico SDK 2.3.1. This leaves a little more memory free, about 0.4 KB.
+- On boards with HSTX video and no PSRAM, a progress bar is now shown while a cartridge (.crt) is written to flash, instead of a blank screen.
 
 # v0.3
 
